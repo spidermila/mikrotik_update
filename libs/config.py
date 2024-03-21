@@ -4,13 +4,18 @@ import paramiko
 class Config:
     def __init__(
             self,
-            username: str,
             backup_dir: str = '',
-            key_file: str = '',
+            private_key_file: str = '',
     ) -> None:
-        self.username = username
+        self.username = ''
+        self.public_key_file: str | None = None
+        self.public_key_owner: str | None = None
+        self.port: int | None = None
+        self.delete_backup_after_download = False
+        self.online_upgrade_branch = 'stable'
         self.backup_dir = backup_dir
-        self.key_file = key_file
-        self.key: paramiko.Ed25519Key | None = None
-        if len(self.key_file) > 0:
-            self.key = paramiko.Ed25519Key.from_private_key_file(self.key_file)
+        self.private_key_file = private_key_file
+        if len(self.private_key_file) > 0:
+            self.key = paramiko.Ed25519Key.from_private_key_file(
+                self.private_key_file,
+            )

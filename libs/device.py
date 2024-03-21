@@ -15,18 +15,17 @@ class Device:
             name: str,
             address: str,
             port: int,
-            username: str = '',
+            username: str,
     ) -> None:
         self.conf = conf
         self.name = name
         self.address = address
         self.port = port
-        if len(username) > 0:
-            self.username = username
-        else:
-            self.username = self.conf.username
+        self.username = username
         self.client: paramiko.SSHClient | None = None
         self.identity = ''
+        self.public_key_file: str | None = None
+        self.public_key_owner: str | None = None
 
     def test_connection(self) -> list[bool]:
         result = [False, False]
@@ -64,6 +63,18 @@ class Device:
             print('-' * 20)
             print(f'The user {self.username} might not exist on {self.name}')
             print('Do you want to log in and create the user? (yY/nN)')
+            public_key_file: str | None
+            if self.public_key_file:
+                public_key_file = self.public_key_file
+            else:
+                public_key_file = self.conf.public_key_file
+
+            public_key_owner: str | None
+            if self.public_key_owner:
+                public_key_owner = self.public_key_owner
+            else:
+                public_key_owner = self.conf.public_key_owner
+
             while True:
                 answer = input('> ')
                 if answer.lower() == 'y':
@@ -72,6 +83,8 @@ class Device:
                         dev_address=self.address,
                         dev_port=self.port,
                         username=self.username,
+                        public_key_file=public_key_file,
+                        public_key_owner=public_key_owner,
                     )
                     break
                 else:
