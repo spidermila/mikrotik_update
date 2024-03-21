@@ -8,6 +8,7 @@ global:
     port: 22
     delete_backup_after_download: False
     online_upgrade_channel: stable # [stable, testing, development, long term]
+    reboot_timeout: 200 # seconds, 240 is default
 devices:
     -   name: main_router
         address: 192.168.1.1

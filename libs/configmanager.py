@@ -36,6 +36,7 @@ class ConfigManager:
         cfg.public_key_owner = gl.get('public_key_owner')
         cfg.port = gl.get('port')
         cfg.log_dir = gl.get('log_dir')
+        cfg.reboot_timeout = gl.get('reboot_timeout')
         cfg.delete_backup_after_download = gl.get(
             'delete_backup_after_download',
         )

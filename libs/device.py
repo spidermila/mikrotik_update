@@ -1,6 +1,7 @@
 import subprocess
 import time
 from datetime import datetime
+from timeit import default_timer
 
 import paramiko
 from scp import SCPClient  # type: ignore
@@ -40,6 +41,29 @@ class Device:
             if self.ssh_test():
                 result[1] = True
         return result
+
+    def simple_ssh_test(self) -> bool:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            if self.conf.key:
+                ssh.connect(
+                    hostname=self.address,
+                    port=self.port,
+                    username=self.username,
+                    pkey=self.conf.key,
+                    look_for_keys=False,
+                )
+            else:
+                ssh.connect(
+                    hostname=self.address,
+                    port=self.port,
+                    username=self.username,
+                    look_for_keys=True,
+                )
+        except Exception:
+            return False
+        return True
 
     def ssh_test(self) -> bool:
         ssh = paramiko.SSHClient()
@@ -207,11 +231,11 @@ class Device:
                     self._update_available = True
                     return
                 if 'Downloaded, please reboot' in line:
-                    print('update already downloaded. reboot manually')
                     logger.log(
                         'warning',
                         self.name,
                         'update already downloaded. reboot manually',
+                        stdout=True,
                     )
         self._update_available = False
 
@@ -275,7 +299,12 @@ class Device:
             )
             return False
         else:
-            print(f'Backup saved to {self.backup_file_full_name}')
+            logger.log(
+                'info',
+                self.name,
+                f'Backup saved to {self.backup_file_full_name}',
+                stdout=True,
+            )
         # download backup
         logger.log(
             'info',
@@ -293,7 +322,12 @@ class Device:
                 stdout=True,
             )
             return False
-        print(f'Backup downloaded to {self.conf.backup_dir}')
+        logger.log(
+            'info',
+            self.name,
+            f'Backup downloaded to {self.conf.backup_dir}',
+            stdout=True,
+        )
         if self.conf.delete_backup_after_download:
             logger.log(
                 'info',
@@ -342,7 +376,6 @@ class Device:
             # run backup
             if not self.backup(logger=logger):
                 return
-            print('downloading update')
             logger.log(
                 'info',
                 self.name,
@@ -357,10 +390,25 @@ class Device:
                     stdout=True,
                 )
                 self._reboot()
+                timer_start = round(default_timer())
                 while True:
-                    print('waiting for connection...')
+                    timer_current = round(default_timer())
+                    timer_elapsed = timer_current - timer_start
+                    remaining = self.conf.reboot_timeout - timer_elapsed
+                    if remaining <= 0:
+                        logger.log(
+                            'warning',
+                            self.name,
+                            'timed out waiting for device after reboot',
+                            stdout=True,
+                        )
+                        return
+                    print(
+                        'waiting for connection. remaining ' +
+                        f'{remaining} seconds...',
+                    )
                     time.sleep(5)
-                    if self.ssh_test():
+                    if self.simple_ssh_test():
                         break
                 print('connection works again')
                 self.ssh_connect()
@@ -383,6 +431,6 @@ class Device:
             logger.log(
                 'info',
                 self.name,
-                'new update not available',
+                'update not available',
                 stdout=True,
             )

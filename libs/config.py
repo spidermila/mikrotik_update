@@ -15,6 +15,7 @@ class Config:
         self.delete_backup_after_download = False
         self.upgrade_type = 'online'
         self.online_upgrade_channel = 'stable'
+        self.reboot_timeout = 240
         self.backup_dir = backup_dir
         self.private_key_file = private_key_file
         if len(self.private_key_file) > 0:
