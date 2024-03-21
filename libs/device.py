@@ -18,12 +18,14 @@ class Device:
             address: str,
             port: int,
             username: str,
+            upgrade_type: str,
     ) -> None:
         self.conf = conf
         self.name = name
         self.address = address
         self.port = port
         self.username = username
+        self.upgrade_type = upgrade_type
         self.client: paramiko.SSHClient | None = None
         self.identity = ''
         self.public_key_file: str | None = None

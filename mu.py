@@ -33,6 +33,7 @@ def main() -> int:
         if d.ssh_test():
             d.ssh_connect()
             d.backup(logger=logger)
+            # print(d.name, d.identity, d.upgrade_type)
             # d.exec_command('user print')
             d.ssh_close()
         else:

@@ -39,7 +39,7 @@ class ConfigManager:
         cfg.delete_backup_after_download = gl.get(
             'delete_backup_after_download',
         )
-        cfg.online_upgrade_branch = gl.get('online_upgrade_branch')
+        cfg.online_upgrade_channel = gl.get('online_upgrade_channel')
 
         devs = data['devices']
         for dev in devs:
@@ -68,13 +68,14 @@ class ConfigManager:
                 address=dev['address'],
                 port=port,
                 username=username,
+                upgrade_type=dev['upgrade_type'],
             )
             devices.append(new_device)
         return (cfg, devices)
 
     def check_config_file(self) -> bool:
         mandatory_global_options = ['backup_dir', 'private_key_file']
-        mandatory_device_options = ['name', 'address']
+        mandatory_device_options = ['name', 'address', 'upgrade_type']
         with open(self.filename) as stream:
             try:
                 data = yaml.safe_load(stream)

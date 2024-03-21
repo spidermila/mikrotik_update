@@ -7,10 +7,12 @@ global:
     public_key_owner: test_user@homePC
     port: 22
     delete_backup_after_download: False
-    online_upgrade_branch: stable # [stable, testing, development, long term]
+    online_upgrade_channel: stable # [stable, testing, development, long term]
 devices:
     -   name: main_router
         address: 192.168.1.1
+        upgrade_type: online # default is online, manual upgrade not yet implemented
+        online_upgrade_channel: stable # stable is default, [stable, testing, development, long term]
     -   name: ap1
         address: 192.168.1.2
         port: 23
