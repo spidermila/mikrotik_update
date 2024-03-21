@@ -12,10 +12,18 @@ class Logger:
             log_dir = '.'
         self.log_file = pathlib.Path(log_dir) / file_name
 
-    def log(self, msg: str) -> None:
+    def log(
+            self,
+            severity: str,
+            device: str,
+            msg: str,
+            stdout: bool = False,
+    ) -> None:
         now = datetime.now()
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
-        log_line = f'{timestamp} - {msg} \n'
+        log_line = f'{timestamp} - {severity} - {device} - {msg} \n'
+        if stdout:
+            print(log_line.strip())
         try:
             with open(self.log_file, 'a') as stream:
                 stream.write(log_line)

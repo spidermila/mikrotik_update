@@ -61,6 +61,20 @@ class ConfigManager:
                 port = cfg.port
             else:
                 port = 22
+            # Use online_upgrade_channel from device, global or stable
+            if 'online_upgrade_channel' in dev:
+                online_upgrade_channel = dev['online_upgrade_channel']
+            elif cfg.online_upgrade_channel:
+                online_upgrade_channel = cfg.online_upgrade_channel
+            else:
+                online_upgrade_channel = 'stable'
+            # Use upgrade_type from device, global or online
+            if 'upgrade_type' in dev:
+                upgrade_type = dev['upgrade_type']
+            elif cfg.upgrade_type:
+                upgrade_type = cfg.upgrade_type
+            else:
+                upgrade_type = 'online'
             # Create new device
             new_device = Device(
                 conf=cfg,
@@ -68,14 +82,15 @@ class ConfigManager:
                 address=dev['address'],
                 port=port,
                 username=username,
-                upgrade_type=dev['upgrade_type'],
+                upgrade_type=upgrade_type,
             )
+            new_device.online_upgrade_channel = online_upgrade_channel
             devices.append(new_device)
         return (cfg, devices)
 
     def check_config_file(self) -> bool:
         mandatory_global_options = ['backup_dir', 'private_key_file']
-        mandatory_device_options = ['name', 'address', 'upgrade_type']
+        mandatory_device_options = ['name', 'address']
         with open(self.filename) as stream:
             try:
                 data = yaml.safe_load(stream)

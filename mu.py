@@ -28,17 +28,18 @@ def main() -> int:
         return 1
     config, devices = cm.load_config()
     logger = Logger(config.log_dir)
-    logger.log('script started')
+    logger.log('info', 'script', 'script started')
     for d in devices:
         if d.ssh_test():
+            # TODO: continue after userregistrator completes successfully
             d.ssh_connect()
-            d.backup(logger=logger)
+            d.upgrade(logger=logger)
             # print(d.name, d.identity, d.upgrade_type)
             # d.exec_command('user print')
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")
-    logger.log('script completed')
+    logger.log('info', 'script', 'script completed')
     return 0
 
 

@@ -13,6 +13,7 @@ class Config:
         self.port: int | None = None
         self.log_dir: str | None = None
         self.delete_backup_after_download = False
+        self.upgrade_type = 'online'
         self.online_upgrade_channel = 'stable'
         self.backup_dir = backup_dir
         self.private_key_file = private_key_file
