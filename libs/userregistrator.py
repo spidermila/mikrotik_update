@@ -31,7 +31,6 @@ class UserRegistrator:
 
         self.public_key_owner: str | None = None
         if 'public_key_owner' in kwargs:
-            print('key owner found')
             _public_key_owner = kwargs['public_key_owner']
             if isinstance(_public_key_owner, str):
                 self.public_key_owner = _public_key_owner

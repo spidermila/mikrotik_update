@@ -11,6 +11,7 @@ class Config:
         self.public_key_file: str | None = None
         self.public_key_owner: str | None = None
         self.port: int | None = None
+        self.log_dir: str | None = None
         self.delete_backup_after_download = False
         self.online_upgrade_branch = 'stable'
         self.backup_dir = backup_dir

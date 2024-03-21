@@ -2,6 +2,7 @@ import argparse
 import os
 
 from libs.configmanager import ConfigManager
+from libs.logger import Logger
 
 
 def main() -> int:
@@ -25,8 +26,9 @@ def main() -> int:
     cm = ConfigManager(configuration_file)
     if not cm.check_config_file():
         return 1
-    _, devices = cm.load_config()
-
+    config, devices = cm.load_config()
+    logger = Logger(config.log_dir)
+    logger.log('started')
     for d in devices:
         if d.ssh_test():
             d.ssh_connect()
