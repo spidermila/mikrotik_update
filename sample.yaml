@@ -1,0 +1,16 @@
+global:
+    log_dir: /home/test_user/mikrotik
+    backup_dir: /home/test_user/mikrotik/backups
+    username: upgrade_user
+    private_key_file: /home/test_user/.ssh/id_ed25519
+    public_key_file: /home/test_user/.ssh/id_ed25519.pub
+    public_key_owner: test_user@homePC
+    port: 22
+    delete_backup_after_download: False
+    online_upgrade_branch: stable # [stable, testing, development, long term]
+devices:
+    -   name: main_router
+        address: 192.168.1.1
+    -   name: ap1
+        address: 192.168.1.2
+        port: 23
