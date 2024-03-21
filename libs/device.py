@@ -1,10 +1,12 @@
 import subprocess
+from datetime import datetime
 
 import paramiko
+from scp import SCPClient  # type: ignore
 
 from libs.config import Config
+from libs.logger import Logger
 from libs.userregistrator import UserRegistrator
-
 # paramiko.common.logging.basicConfig(level=paramiko.common.DEBUG)
 
 
@@ -157,15 +159,17 @@ class Device:
             self.client = None
 
     def ssh_call(self, remote_cmd: str) -> list:
+        if not self.client:
+            print('SSH not connected')
+            raise SystemExit(1)
         output = []
-        if self.client:
-            try:
-                stdin, stdout, stderr = self.client.exec_command(remote_cmd)
-                for line in stdout.readlines():
-                    output.append(line.strip('\n'))
-                return output
-            except Exception as e:
-                print(e)
+        try:
+            stdin, stdout, stderr = self.client.exec_command(remote_cmd)
+            for line in stdout.readlines():
+                output.append(line.strip('\n'))
+            return output
+        except Exception as e:
+            print(e)
             raise
         return output
 
@@ -174,7 +178,45 @@ class Device:
             print(line)
 
     def _get_identity(self) -> str:
-        if self.client:
-            output = self.ssh_call('system identity print')
-            return output[0].split()[1]
-        return ''
+        if not self.client:
+            print('SSH not connected')
+            raise SystemExit(1)
+        output = self.ssh_call('system identity print')
+        return output[0].split()[1]
+
+    def _delete_file(self, filename: str) -> None:
+        if not self.client:
+            print('SSH not connected')
+            raise SystemExit(1)
+        _ = self.ssh_call(f'file remove {filename}')
+
+    def backup(self, logger: Logger) -> None:
+        # create backup
+        if not self.client:
+            print('SSH not connected')
+            raise SystemExit(1)
+        now = datetime.now()
+        timestamp = now.strftime('%Y%m%d-%H%M')
+        backup_file_name = f'{self.identity}-{timestamp}'
+        self.backup_file_full_name = backup_file_name + '.backup'
+        logger.log(f'running backup to file {self.backup_file_full_name}')
+        output = self.ssh_call(f'system backup save name={backup_file_name}')
+        if 'Configuration backup saved\r' not in output:
+            print(output)
+            logger.log(f'Backup failed: {output}')
+            return
+        else:
+            print(f'Backup saved to {self.backup_file_full_name}')
+        # download backup
+        logger.log(f'downloading backup file to {self.conf.backup_dir}')
+        try:
+            with SCPClient(self.client.get_transport()) as scp:
+                scp.get(self.backup_file_full_name, self.conf.backup_dir)
+        except Exception as e:
+            logger.log(f'{e}')
+            raise
+        print(f'Backup downloaded to {self.conf.backup_dir}')
+        if self.conf.delete_backup_after_download:
+            print('Deleting backup on device.')
+            logger.log('deleting backup on device')
+            self._delete_file(self.backup_file_full_name)

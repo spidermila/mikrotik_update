@@ -21,21 +21,23 @@ def main() -> int:
     args = parser.parse_args()
     configuration_file = args.configuration_file
     if not os.path.isfile(configuration_file):
-        print(f'File {args.soubor} doesn\'t exist!')
+        print(f'File {args.configuration_file} doesn\'t exist!')
         return 1
     cm = ConfigManager(configuration_file)
     if not cm.check_config_file():
         return 1
     config, devices = cm.load_config()
     logger = Logger(config.log_dir)
-    logger.log('started')
+    logger.log('script started')
     for d in devices:
         if d.ssh_test():
             d.ssh_connect()
-            d.exec_command('user print')
+            d.backup(logger=logger)
+            # d.exec_command('user print')
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")
+    logger.log('script completed')
     return 0
 
 
