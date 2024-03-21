@@ -13,12 +13,28 @@ class UserRegistrator:
             dev_address: str,
             dev_port: int,
             username: str,
+            *args,
+            **kwargs,
     ) -> None:
         self.dev_name = dev_name
         self.dev_address = dev_address
         self.dev_port = dev_port
         self.username = username
         self.client: paramiko.SSHClient | None = None
+
+        # kwargs
+        self.public_key_file: pathlib.Path | None = None
+        if 'public_key_file' in kwargs:
+            _public_key_file = kwargs['public_key_file']
+            if isinstance(_public_key_file, str):
+                self.public_key_file = pathlib.Path(_public_key_file)
+
+        self.public_key_owner: str | None = None
+        if 'public_key_owner' in kwargs:
+            print('key owner found')
+            _public_key_owner = kwargs['public_key_owner']
+            if isinstance(_public_key_owner, str):
+                self.public_key_owner = _public_key_owner
 
         print('Enter a valid user name to log in.')
         self._admin_user = input('> ')
@@ -30,10 +46,16 @@ class UserRegistrator:
         else:
             self.register_user()
 
-        print(f'Full path to the public key file to upload to {self.dev_name}')
-        self.pub_key_file = pathlib.Path(input('> '))
-        print('Key owner')
-        self.pub_key_owner = input('> ')
+        if not self.public_key_file:
+            print(
+                'Full path to the public key ' +
+                f'file to upload to {self.dev_name}',
+            )
+            self.public_key_file = pathlib.Path(input('> '))
+
+        if not self.public_key_owner:
+            print('Key owner')
+            self.public_key_owner = input('> ')
 
         if not self.check_key_file():
             print(f'Key not present on {self.dev_name}. Uploading...')
@@ -65,10 +87,10 @@ class UserRegistrator:
         if not self.client:
             return
         with SCPClient(self.client.get_transport()) as scp:
-            scp.put(self.pub_key_file)
+            scp.put(self.public_key_file)
 
     def check_key_file(self) -> bool:
-        if not self.pub_key_file:
+        if not self.public_key_file:
             return False
         if not self.client:
             return False
@@ -77,7 +99,7 @@ class UserRegistrator:
             stdin, stdout, stderr = self.client.exec_command(_cmd)
             for line in stdout.readlines():
                 if len(line.split()) > 2:
-                    if self.pub_key_file.name == line.split()[1]:
+                    if self.public_key_file.name == line.split()[1]:
                         return True
         except Exception as e:
             print(e)
@@ -126,12 +148,15 @@ class UserRegistrator:
             return
 
     def add_key_to_user(self) -> None:
-        if not self.client:
+        if (
+            not self.client or
+            not isinstance(self.public_key_file, pathlib.Path)
+        ):
             return
         print('Adding key to user...')
         _cmd = f'user ssh-keys import user={self.username} ' \
-            f'public-key-file={self.pub_key_file.name} ' \
-            f'key-owner={self.pub_key_owner}'
+            f'public-key-file={self.public_key_file.name} ' \
+            f'key-owner={self.public_key_owner}'
         try:
             stdin, stdout, stderr = self.client.exec_command(_cmd)
             for line in stdout.readlines():
