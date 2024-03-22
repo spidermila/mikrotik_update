@@ -35,6 +35,7 @@ class UserRegistrator:
             if isinstance(_public_key_owner, str):
                 self.public_key_owner = _public_key_owner
 
+    def run(self) -> bool:
         print('Enter a valid user name to log in.')
         self._admin_user = input('> ')
         self._admin_pwd = getpass.getpass()
@@ -57,15 +58,17 @@ class UserRegistrator:
             self.public_key_owner = input('> ')
 
         if not self.check_key_file():
-            print(f'Key not present on {self.dev_name}. Uploading...')
+            print(f'Key file not present on {self.dev_name}. Uploading...')
             self.upload_key_file()
         sleep(1)
         if not self.check_key_file():
             print('Upload failed.')
-            return
+            return False
         print('Uploaded successfully.')
         self.add_key_to_user()
         print('Done.')
+        self.ssh_close()
+        return True
 
     def ssh_connect(self) -> None:
         self.client = paramiko.SSHClient()
@@ -81,6 +84,12 @@ class UserRegistrator:
         except paramiko.AuthenticationException as err:
             print(f'ssh err on {self.dev_name}: {err}')
             raise
+
+    def ssh_close(self) -> None:
+        del self._admin_pwd
+        if self.client:
+            self.client.close()
+            self.client = None
 
     def upload_key_file(self) -> None:
         if not self.client:

@@ -90,8 +90,11 @@ class Device:
         ) as err:
             print(f'ssh err on {self.name}: {err}')
             print('-' * 20)
-            print(f'The user {self.username} might not exist on {self.name}')
-            print('Do you want to log in and create the user? (yY/nN)')
+            print(
+                f'The user {self.username} might not exist ' +
+                f'or ssh key is missing on {self.name}.',
+            )
+            print('Should the script log in and try to fix this? (yY/nN)')
             public_key_file: str | None
             if self.public_key_file:
                 public_key_file = self.public_key_file
@@ -107,7 +110,7 @@ class Device:
             while True:
                 answer = input('> ')
                 if answer.lower() == 'y':
-                    UserRegistrator(
+                    ur = UserRegistrator(
                         dev_name=self.name,
                         dev_address=self.address,
                         dev_port=self.port,
@@ -115,7 +118,7 @@ class Device:
                         public_key_file=public_key_file,
                         public_key_owner=public_key_owner,
                     )
-                    break
+                    return ur.run()
                 else:
                     break
 
