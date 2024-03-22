@@ -1,15 +1,15 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/spidermila/mikrotik_upgrade/main.svg)](https://results.pre-commit.ci/latest/github/spidermila/mikrotik_upgrade/main)
 
 # mikrotik_upgrade
-A command line tool to simplify update of a fleet of Mikrotik devices. 
-The script uses ssh key to authenticate with the Mikrotik device. 
-I expect there will be a dedicated user created for this purpose. 
+A command line tool to simplify update of a fleet of Mikrotik devices.
+The script uses ssh key to authenticate with the Mikrotik device.
+I expect there will be a dedicated user created for this purpose.
 The script can set up this user and upload the public key for you.
 
-If the ssh authentication fails, the script will prompt for a user 
-and password of an existing user and attempt to create the script user. 
-It will also upload an existing public key to the device and associate 
-it to the script user. Next time you run the script, it should 
+If the ssh authentication fails, the script will prompt for a user
+and password of an existing user and attempt to create the script user.
+It will also upload an existing public key to the device and associate
+it to the script user. Next time you run the script, it should
 authenticate with the device and perform the upgrade.
 
 I recommend to use virtualenv or venv and install the prerequisites there.
