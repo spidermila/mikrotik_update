@@ -25,6 +25,7 @@ python mu.py sample.yaml
 ```
 
 
+Example yaml file:
 ```yaml
 global: # global settings
     log_dir: /home/test_user/mikrotik # local dicrectory where log file will be stored
