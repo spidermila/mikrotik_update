@@ -189,7 +189,7 @@ class Device:
         if not self.client:
             print('SSH not connected')
             raise SystemExit(1)
-        output = self.ssh_call('system package update print')
+        output = self.ssh_call('system package update check-for-updates')
         for line in output:
             if 'installed-version' in line:
                 self._installed_version = line.split()[1]
