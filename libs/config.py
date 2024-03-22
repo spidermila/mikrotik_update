@@ -1,3 +1,5 @@
+import pathlib
+
 import paramiko
 
 
@@ -16,7 +18,7 @@ class Config:
         self.upgrade_type = 'online'
         self.online_upgrade_channel = 'stable'
         self.reboot_timeout = 240
-        self.backup_dir = backup_dir
+        self.backup_dir = pathlib.Path(backup_dir)
         self.private_key_file = private_key_file
         if len(self.private_key_file) > 0:
             self.key = paramiko.Ed25519Key.from_private_key_file(

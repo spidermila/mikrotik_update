@@ -306,6 +306,7 @@ class Device:
                 stdout=True,
             )
         # download backup
+        self.conf.backup_dir.mkdir(parents=True, exist_ok=True)
         logger.log(
             'info',
             self.name,
