@@ -39,8 +39,9 @@ class UserRegistrator:
         print('Enter a valid user name to log in.')
         self._admin_user = input('> ')
         self._admin_pwd = getpass.getpass()
-        self.ssh_connect()
         print('Connecting...')
+        self.ssh_connect()
+        del self._admin_pwd
         if self.user_exists():
             print(f'User {self.username} exists.')
         else:
@@ -86,7 +87,6 @@ class UserRegistrator:
             raise
 
     def ssh_close(self) -> None:
-        del self._admin_pwd
         if self.client:
             self.client.close()
             self.client = None
