@@ -31,11 +31,8 @@ def main() -> int:
     logger.log('info', 'script', '=======script started=======')
     for d in devices:
         if d.ssh_test():
-            # TODO: continue after userregistrator completes successfully
             d.ssh_connect()
             d.upgrade(logger=logger)
-            # print(d.name, d.identity, d.upgrade_type)
-            # d.exec_command('user print')
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")

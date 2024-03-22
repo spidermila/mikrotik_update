@@ -1,4 +1,3 @@
-import subprocess
 import time
 from datetime import datetime
 from timeit import default_timer
@@ -33,14 +32,6 @@ class Device:
         self.identity = ''
         self.public_key_file: str | None = None
         self.public_key_owner: str | None = None
-
-    def test_connection(self) -> list[bool]:
-        result = [False, False]
-        if self._ping_test():
-            result[0] = True
-            if self.ssh_test():
-                result[1] = True
-        return result
 
     def simple_ssh_test(self) -> bool:
         ssh = paramiko.SSHClient()
@@ -130,30 +121,6 @@ class Device:
             ssh.close()
             return True
 
-    def _ping_test(self) -> bool:
-        result = subprocess.run(
-            [
-                'ping',
-                '-c1',
-                self.address,
-            ],
-            shell=False,
-            stdin=None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if result.returncode != 0:
-            print('-'*20)
-            print(f'Error when pinging {self.name}')
-            print('stdout:')
-            print(f"{result.stdout.decode('utf-8')}")
-            print('stderr:')
-            print(f"{result.stderr.decode('utf-8')}")
-            print('-'*20)
-            return False
-        return True
-
     def ssh_connect(self) -> None:
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -175,7 +142,7 @@ class Device:
                 )
             self.identity = self._get_identity()
         except paramiko.AuthenticationException as err:
-            print(f'ssh err on {self.name}: {err}')
+            print(f'SSH err on {self.name}: {err}')
             raise
 
     def ssh_close(self) -> None:
@@ -196,7 +163,6 @@ class Device:
         except Exception as e:
             print(e)
             raise
-        return output
 
     def exec_command(self, remote_cmd: str) -> None:
         for line in self.ssh_call(remote_cmd):
@@ -259,11 +225,11 @@ class Device:
             raise SystemExit(1)
         output = self.ssh_call(f'system package update set channel={channel}')
         if 'syntax error' in output:
-            print(f'Syntax error when setting channel {channel}')
             logger.log(
                 'error',
                 self.name,
-                f'Syntax error when setting channel {channel}',
+                f'syntax error when setting channel {channel}',
+                stdout=True,
             )
 
     def _delete_file(self, filename: str) -> None:
@@ -298,14 +264,14 @@ class Device:
             logger.log(
                 'error',
                 self.name,
-                f'Backup failed: {output}',
+                f'backup failed: {output}',
             )
             return False
         else:
             logger.log(
                 'info',
                 self.name,
-                f'Backup saved to {self.backup_file_full_name}',
+                f'backup saved to {self.backup_file_full_name}',
                 stdout=True,
             )
         # download backup
@@ -329,7 +295,7 @@ class Device:
         logger.log(
             'info',
             self.name,
-            f'Backup downloaded to {self.conf.backup_dir}',
+            f'backup downloaded to {self.conf.backup_dir}',
             stdout=True,
         )
         if self.conf.delete_backup_after_download:
@@ -354,13 +320,13 @@ class Device:
         # check channel
         if self._get_channel() != self.online_upgrade_channel:
             print(
-                'Setting desired online update channel' +
+                'setting desired online update channel' +
                 f' {self.online_upgrade_channel}',
             )
             logger.log(
                 'info',
                 self.name,
-                'Setting desired online update channel' +
+                'setting desired online update channel' +
                 f' {self.online_upgrade_channel}',
                 stdout=True,
             )
