@@ -12,11 +12,18 @@ def main() -> int:
         '--help',
         action='help',
         default=argparse.SUPPRESS,
-        help='show this help',
+        help='Show this help',
     )
     parser.add_argument(
         'configuration_file',
-        help='configuration file in yaml format',
+        help='Configuration file in yaml format',
+    )
+    parser.add_argument(
+        '-D',
+        '--dry-run',
+        '--check-only',
+        help='Only check the updates. Do not perform backup and update.',
+        action='store_true',
     )
     args = parser.parse_args()
     configuration_file = args.configuration_file
@@ -28,11 +35,23 @@ def main() -> int:
         return 1
     config, devices = cm.load_config()
     logger = Logger(config.log_dir)
-    logger.log('info', 'script', '=======script started=======')
+    if args.dry_run:
+        logger.log('info', 'script', '=======DRYRUN started=======')
+    else:
+        logger.log('info', 'script', '=======script started=======')
     for d in devices:
         if d.ssh_test():
             d.ssh_connect()
-            d.upgrade(logger=logger)
+            if args.dry_run:
+                d.refresh_update_info(logger=logger)
+                logger.log(
+                    'info',
+                    d.name,
+                    d.version_info_str,
+                    stdout=True,
+                )
+            else:
+                d.upgrade(logger=logger)
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")

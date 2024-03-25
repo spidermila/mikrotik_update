@@ -2,6 +2,10 @@
 
 # mikrotik_upgrade
 A command line tool to simplify update of a fleet of Mikrotik devices.
+The script will first perform a backup of the device and download
+it to a local directory. The upgrade is performed only if
+the backup and download are successful.
+
 The script uses ssh key to authenticate with the Mikrotik device.
 I expect there will be a dedicated user created for this purpose.
 The script can set up this user and upload the public key for you.
@@ -9,8 +13,7 @@ The script can set up this user and upload the public key for you.
 If the ssh authentication fails, the script will prompt for a user
 and password of an existing user and attempt to create the script user.
 It will also upload an existing public key to the device and associate
-it to the script user. Next time you run the script, it should
-authenticate with the device and perform the upgrade.
+it to the script user.
 
 I recommend to use virtualenv or venv and install the prerequisites there.
 

@@ -32,6 +32,10 @@ class Device:
         self.identity = ''
         self.public_key_file: str | None = None
         self.public_key_owner: str | None = None
+        self.installed_version = 'unknown'
+        self.latest_version = 'unknown'
+        self.version_info_str = f'installed: {self.installed_version}, ' +\
+                                f'available: {self.latest_version}'
 
     def simple_ssh_test(self) -> bool:
         ssh = paramiko.SSHClient()
@@ -185,19 +189,25 @@ class Device:
                 return line.split()[1]
         return ''
 
-    def _refresh_update_info(self, logger: Logger) -> None:
+    def refresh_update_info(self, logger: Logger) -> None:
         if not self.client:
             print('SSH not connected')
             raise SystemExit(1)
         output = self.ssh_call('system package update check-for-updates')
         for line in output:
             if 'installed-version' in line:
-                self._installed_version = line.split()[1]
+                self.installed_version = line.split()[1]
+                self.version_info_str = \
+                    f'installed: {self.installed_version}, ' +\
+                    f'available: {self.latest_version}'
             if 'latest-version' in line:
-                self._latest_version = line.split()[1]
+                self.latest_version = line.split()[1]
+                self.version_info_str = \
+                    f'installed: {self.installed_version}, ' +\
+                    f'available: {self.latest_version}'
             if 'status:' in line:
                 if 'New version is available' in line:
-                    self._update_available = True
+                    self.update_available = True
                     return
                 if 'Downloaded, please reboot' in line:
                     logger.log(
@@ -206,7 +216,7 @@ class Device:
                         'update already downloaded. reboot manually',
                         stdout=True,
                     )
-        self._update_available = False
+        self.update_available = False
 
     def _download_update(self) -> bool:
         if not self.client:
@@ -308,39 +318,44 @@ class Device:
             self._delete_file(self.backup_file_full_name)
         return True
 
+    def get_update_available(self, logger: Logger) -> bool:
+        if not self.client:
+            print('SSH not connected')
+            raise SystemExit(1)
+        self.refresh_update_info(logger=logger)
+        return self.update_available
+
     def upgrade(self, logger: Logger) -> None:
-        # create backup
         if not self.client:
             print('SSH not connected')
             raise SystemExit(1)
         if self.upgrade_type == 'online':
+            # check channel
+            if self._get_channel() != self.online_upgrade_channel:
+                print(
+                    'setting desired online update channel' +
+                    f' {self.online_upgrade_channel}',
+                )
+                logger.log(
+                    'info',
+                    self.name,
+                    'setting desired online update channel' +
+                    f' {self.online_upgrade_channel}',
+                    stdout=True,
+                )
+                # set channel
+                self._set_channel(logger, self.online_upgrade_channel)
+                time.sleep(1)
+            # check update
+            self.refresh_update_info(logger=logger)
             self._online_upgrade(logger=logger)
 
     def _online_upgrade(self, logger: Logger) -> None:
-        # check channel
-        if self._get_channel() != self.online_upgrade_channel:
-            print(
-                'setting desired online update channel' +
-                f' {self.online_upgrade_channel}',
-            )
+        if self.update_available:
             logger.log(
                 'info',
                 self.name,
-                'setting desired online update channel' +
-                f' {self.online_upgrade_channel}',
-                stdout=True,
-            )
-            # set channel
-            self._set_channel(logger, self.online_upgrade_channel)
-            time.sleep(1)
-        # check update
-        self._refresh_update_info(logger=logger)
-        if self._update_available:
-            logger.log(
-                'info',
-                self.name,
-                f'installed: {self._installed_version}, ' +
-                f'available: {self._latest_version}',
+                self.version_info_str,
                 stdout=True,
             )
             # run backup
@@ -382,12 +397,11 @@ class Device:
                         break
                 print('connection works again')
                 self.ssh_connect()
-                self._refresh_update_info(logger=logger)
+                self.refresh_update_info(logger=logger)
                 logger.log(
                     'info',
                     self.name,
-                    f'installed: {self._installed_version}, ' +
-                    f'available: {self._latest_version}',
+                    self.version_info_str,
                     stdout=True,
                 )
             else:
