@@ -31,8 +31,8 @@ python mu.py sample.yaml
 Example yaml file:
 ```yaml
 global: # global settings
-    log_dir: /home/test_user/mikrotik # local dicrectory where log file will be stored
-    backup_dir: /home/test_user/mikrotik/backups # local directory where backup files will be stored
+    log_dir: /home/test_user/mikrotik_upgrade # local dicrectory where log file will be stored
+    backup_dir: /home/test_user/mikrotik_upgrade/backups # local directory where backup files will be stored
     username: upgrade_user # script user on the Mikrotik device
     private_key_file: /home/test_user/.ssh/id_ed25519 # private key which will be used for authentication
     public_key_file: /home/test_user/.ssh/id_ed25519.pub # public key which will be uploaded to the device, if needed
@@ -53,6 +53,18 @@ devices: # your fleet of Mikrotik devices
         port: 23 # setting this on the device level has a higher priority over the global settings
     -   name: minimal_example_device # global and default settings will be applied for this one
         address: 192.168.1.3
+    -   name: ap2
+        address: 192.168.1.4
+        upgrade_type: manual
+        packages:
+            - /home/user/mikrotik_upgrade/packages/routeros-7.15beta9-mipsbe.npk
+            - /home/user/mikrotik_upgrade/packages/wireless-7.15beta9-mipsbe.npk
+    -   name: ap3
+        address: 192.168.1.5
+        upgrade_type: manual
+        packages:
+            - /home/test_user/mikrotik_upgrade/packages/wireless-7.14.1-mipsbe.npk
+            - /home/test_user/mikrotik_upgrade/packages/routeros-7.14.1-mipsbe.npk
 ```
 
 The tool will backup the configuration, download the backup file and upgrade the device.
