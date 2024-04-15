@@ -28,7 +28,7 @@ python mu.py sample.yaml
 ```
 
 Options:
-```bash
+```
 -h --help        Help
 -D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
 ```
@@ -62,8 +62,8 @@ devices: # your fleet of Mikrotik devices
         address: 192.168.1.4
         upgrade_type: manual
         packages:
-            - /home/user/mikrotik_upgrade/packages/routeros-7.15beta9-mipsbe.npk
-            - /home/user/mikrotik_upgrade/packages/wireless-7.15beta9-mipsbe.npk
+            - /home/test_user/mikrotik_upgrade/packages/routeros-7.15beta9-mipsbe.npk
+            - /home/test_user/mikrotik_upgrade/packages/wireless-7.15beta9-mipsbe.npk
     -   name: ap3
         address: 192.168.1.5
         upgrade_type: manual
