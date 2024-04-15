@@ -27,6 +27,11 @@ Usage:
 python mu.py sample.yaml
 ```
 
+Options:
+```bash
+-h --help        Help
+-D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
+```
 
 Example yaml file:
 ```yaml
