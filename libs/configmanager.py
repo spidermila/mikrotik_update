@@ -76,6 +76,12 @@ class ConfigManager:
                 upgrade_type = cfg.upgrade_type
             else:
                 upgrade_type = 'online'
+            # load packages if manual upgrade type
+            if upgrade_type == 'manual':
+                packages = dev['packages']
+            else:
+                packages = []
+
             # Create new device
             new_device = Device(
                 conf=cfg,
@@ -84,6 +90,7 @@ class ConfigManager:
                 port=port,
                 username=username,
                 upgrade_type=upgrade_type,
+                packages=packages,
             )
             new_device.online_upgrade_channel = online_upgrade_channel
             devices.append(new_device)

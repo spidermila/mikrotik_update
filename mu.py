@@ -43,13 +43,23 @@ def main() -> int:
         if d.ssh_test():
             d.ssh_connect()
             if args.dry_run:
-                d.refresh_update_info(logger=logger)
-                logger.log(
-                    'info',
-                    d.name,
-                    d.version_info_str,
-                    stdout=True,
-                )
+                if d.upgrade_type == 'manual':
+                    installed = d.get_installed_packages(logger)
+                    logger.log(
+                        'info',
+                        d.name,
+                        'manual upgrade. installed packages: ' +
+                        f'{installed}, packages to upgrade: {d.packages}',
+                        stdout=True,
+                    )
+                else:
+                    d.refresh_update_info(logger=logger)
+                    logger.log(
+                        'info',
+                        d.name,
+                        d.version_info_str,
+                        stdout=True,
+                    )
             else:
                 d.upgrade(logger=logger)
             d.ssh_close()
