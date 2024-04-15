@@ -193,6 +193,12 @@ class Device:
         if not self.client:
             print('SSH not connected')
             raise SystemExit(1)
+        # set desired channel
+        set_back_channel = False
+        original_channel = self._get_channel()
+        if original_channel != self.online_upgrade_channel:
+            self._set_channel(logger, self.online_upgrade_channel)
+            set_back_channel = True
         output = self.ssh_call('system package update check-for-updates')
         for line in output:
             if 'installed-version' in line:
@@ -208,6 +214,8 @@ class Device:
             if 'status:' in line:
                 if 'New version is available' in line:
                     self.update_available = True
+                    if set_back_channel:
+                        self._set_channel(logger, original_channel)
                     return
                 if 'Downloaded, please reboot' in line:
                     logger.log(
@@ -217,6 +225,8 @@ class Device:
                         stdout=True,
                     )
         self.update_available = False
+        if set_back_channel:
+            self._set_channel(logger, original_channel)
 
     def _download_update(self) -> bool:
         if not self.client:
