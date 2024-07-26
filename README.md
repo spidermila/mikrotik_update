@@ -51,7 +51,7 @@ devices: # your fleet of Mikrotik devices
         address: 192.168.1.1 # mandatory
         port: 22 # optional if specified globally
         username: main_router_upgrade_user # optional
-        upgrade_type: online # optional, default is online, manual upgrade not yet implemented
+        upgrade_type: online # optional, default is online, [online, manual]
         online_upgrade_channel: stable # optional, stable is default, [stable, testing, development, long term]
     -   name: ap1
         address: 192.168.1.2
