@@ -3,10 +3,14 @@ import os
 
 from libs.configmanager import ConfigManager
 from libs.logger import Logger
+from libs.version import __version__
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(
+        add_help=False,
+        prog='Mikrotik Upgrade',
+    )
     parser.add_argument(
         '-h',
         '--help',
@@ -24,6 +28,13 @@ def main() -> int:
         '--check-only',
         help='Only check the updates. Do not perform backup and update.',
         action='store_true',
+    )
+    parser.add_argument(
+        '-V',
+        '--version',
+        help='Display the program version',
+        action='version',
+        version=f'%(prog)s version {__version__}',
     )
     args = parser.parse_args()
     configuration_file = args.configuration_file
