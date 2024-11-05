@@ -29,6 +29,7 @@ python mu.py sample.yaml
 
 Options:
 ```
+-V --version     Show version
 -h --help        Help
 -D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
 ```
