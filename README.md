@@ -6,7 +6,7 @@ The script will first perform a backup of the device and download
 it to a local directory. The upgrade is performed only if
 the backup and download are successful.
 
-The script uses **ssh key** to authenticate with the Mikrotik device. 
+The script uses **ssh key** to authenticate with the Mikrotik device.
 You need to generate the ssh key pair before using this program.
 I expect there will be a dedicated user created for this purpose.
 The script can set up this user and upload the public key for you.
