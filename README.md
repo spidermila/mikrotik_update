@@ -6,7 +6,8 @@ The script will first perform a backup of the device and download
 it to a local directory. The upgrade is performed only if
 the backup and download are successful.
 
-The script uses ssh key to authenticate with the Mikrotik device.
+The script uses **ssh key** to authenticate with the Mikrotik device. 
+You need to generate the ssh key pair before using this program.
 I expect there will be a dedicated user created for this purpose.
 The script can set up this user and upload the public key for you.
 
@@ -15,6 +16,17 @@ and password of an existing user and attempt to create the script user.
 It will also upload an existing public key to the device and associate
 it to the script user.
 
+## How to use the compiled binary file
+The released versions contain compiled executable files for Linux and Windows which can be used directly.
+```bash
+./mu sample.yaml
+```
+or
+```bash
+mu.exe sample.yaml
+```
+
+## How to use the python script
 I recommend to use virtualenv or venv and install the prerequisites there.
 
 Prerequisites:
@@ -34,7 +46,7 @@ Options:
 -D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
 ```
 
-Example yaml file:
+## Example yaml file
 ```yaml
 global: # global settings
     log_dir: /home/test_user/mikrotik_upgrade # local dicrectory where log file will be stored
@@ -43,7 +55,7 @@ global: # global settings
     private_key_file: /home/test_user/.ssh/id_ed25519 # private key which will be used for authentication
     public_key_file: /home/test_user/.ssh/id_ed25519.pub # public key which will be uploaded to the device, if needed
     public_key_owner: test_user@homePC # this string will be stored on the device along with the key
-    port: 22 # ssh port of the device
+    port: 22 # ssh port of the devices
     delete_backup_after_download: False # delete the backup file on the Mikrotik device once it's downloaded to backup_dir
     online_upgrade_channel: stable # [stable, testing, development, long term]
     reboot_timeout: 200 # seconds, 240 is default
