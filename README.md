@@ -26,6 +26,13 @@ or
 mu.exe sample.yaml
 ```
 
+Options:
+```
+-V --version     Show version
+-h --help        Help
+-D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
+```
+
 ## How to use the python script
 I recommend to use virtualenv or venv and install the prerequisites there.
 
