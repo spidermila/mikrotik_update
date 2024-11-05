@@ -17,7 +17,7 @@ It will also upload an existing public key to the device and associate
 it to the script user.
 
 ## How to use the compiled binary file
-The released versions contain compiled executable files for Linux and Windows which can be used directly.
+The released versions contain compiled executable files for Linux and Windows, which can be used directly.
 ```bash
 ./mu sample.yaml
 ```
