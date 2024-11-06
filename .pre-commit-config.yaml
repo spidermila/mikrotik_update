@@ -30,6 +30,6 @@ repos:
     rev: v1.13.0
     hooks:
     -   id: mypy
-        additional_dependencies: [types-PyYAML, types-paramiko]
+        additional_dependencies: [types-PyYAML, types-paramiko, pytest]
         args:
         - --explicit-package-bases

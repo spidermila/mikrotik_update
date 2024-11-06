@@ -1,14 +1,6 @@
-try:
-    import yaml
-except (NameError, ModuleNotFoundError):
-    import sys
-    print('PyYAML is needed for this program.')
-    raise ImportError(
-        'PyYAML is needed for this program.\n'
-        f'Install it: {sys.executable} -m pip install PyYAML',
-    )
-
 from typing import List
+
+import yaml
 
 from libs.config import Config
 from libs.device import Device
