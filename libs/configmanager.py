@@ -141,4 +141,7 @@ class ConfigManager:
                             print('Missing mandatory device options:')
                             for mo in missing_options:
                                 print(mo)
+            else:
+                print('No devices specified!')
+                ok = False
         return ok

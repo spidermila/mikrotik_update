@@ -454,7 +454,7 @@ def test_check_config_file_missing_global_options(capsys):
         assert 'private_key_file' in captured.out
 
 
-def test_check_config_file_missing_device_options(capsys):
+def test_check_config_file_missing_one_device_option(capsys):
     mock_data = """
     global:
       backup_dir: /path/to/backup
@@ -469,3 +469,71 @@ def test_check_config_file_missing_device_options(capsys):
         assert not result
         assert 'Missing mandatory device options:' in captured.out
         assert 'address' in captured.out
+
+
+def test_check_config_file_missing_two_device_options(capsys):
+    mock_data = """
+    global:
+      backup_dir: /path/to/backup
+      private_key_file: /path/to/private_key
+    devices:
+      - test-option: test-value
+    """
+    with patch('builtins.open', mock_open(read_data=mock_data)):
+        config_manager = ConfigManager('dummy_filename')
+        result = config_manager.check_config_file()
+        captured = capsys.readouterr()
+        assert not result
+        assert 'Missing mandatory device options:' in captured.out
+        assert 'address' in captured.out
+        assert 'name' in captured.out
+
+
+def test_check_config_file_device_not_dict(capsys):
+    mock_data = """
+    global:
+      backup_dir: /path/to/backup
+      private_key_file: /path/to/private_key
+    devices:
+      - - test
+    """
+    with patch('builtins.open', mock_open(read_data=mock_data)):
+        config_manager = ConfigManager('dummy_filename')
+        result = config_manager.check_config_file()
+        captured = capsys.readouterr()
+        assert not result
+        assert 'Device entry is not dict!' in captured.out
+
+
+def test_check_config_file_no_devices_specified(capsys):
+    mock_data = """
+    global:
+      backup_dir: /path/to/backup
+      private_key_file: /path/to/private_key
+    devices:
+      []
+    """
+    with patch('builtins.open', mock_open(read_data=mock_data)):
+        config_manager = ConfigManager('dummy_filename')
+        result = config_manager.check_config_file()
+        captured = capsys.readouterr()
+        assert not result
+        assert 'No devices specified!' in captured.out
+
+
+def test_check_config_file_correct(capsys):
+    mock_data = """
+    global:
+      backup_dir: /path/to/backup
+      private_key_file: /path/to/private_key
+    devices:
+      - name: test-dev
+        address: 192.168.1.1
+        other-option: test-value
+    """
+    with patch('builtins.open', mock_open(read_data=mock_data)):
+        config_manager = ConfigManager('dummy_filename')
+        result = config_manager.check_config_file()
+        # print(f'{result=}')
+        # captured = capsys.readouterr()
+        assert result
