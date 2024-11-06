@@ -27,6 +27,7 @@ def test_load_config_success():
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
             'online_upgrade_channel': 'stable',
+            'upgrade_type': 'cfg-manual',
         },
         'devices': [
             {
@@ -35,7 +36,7 @@ def test_load_config_success():
                 'username': 'device_user',
                 'port': 2222,
                 'online_upgrade_channel': 'beta',
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -56,6 +57,7 @@ def test_load_config_success():
             assert cfg.reboot_timeout == 240
             assert cfg.delete_backup_after_download is True
             assert cfg.online_upgrade_channel == 'stable'
+            assert cfg.upgrade_type == 'cfg-manual'
 
             assert len(devices) == 1
             device = devices[0]
@@ -64,8 +66,8 @@ def test_load_config_success():
             assert device.username == 'device_user'
             assert device.port == 2222
             assert device.online_upgrade_channel == 'beta'
-            assert device.upgrade_type == 'manual'
-            assert device.packages == ['package1', 'package2']
+            assert device.upgrade_type == 'dev-manual'
+            assert device.packages == []
 
 
 def test_load_config_yamlerror():
@@ -96,7 +98,7 @@ def test_load_config_username_not_in_devices():
                 'address': '192.168.1.1',
                 'port': 2222,
                 'online_upgrade_channel': 'beta',
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -128,7 +130,7 @@ def test_load_config_no_username(capsys):
                 'address': '192.168.1.1',
                 'port': 2222,
                 'online_upgrade_channel': 'beta',
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -161,7 +163,7 @@ def test_load_config_prt_not_in_devices():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'online_upgrade_channel': 'beta',
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -193,7 +195,7 @@ def test_load_config_no_port():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'online_upgrade_channel': 'beta',
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -218,7 +220,7 @@ def test_load_config_no_online_update_channel_in_dev():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
+            'online_upgrade_channel': 'test_stable',
         },
         'devices': [
             {
@@ -226,7 +228,39 @@ def test_load_config_no_online_update_channel_in_dev():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'port': 2222,
-                'upgrade_type': 'manual',
+                'upgrade_type': 'dev-manual',
+                'packages': ['package1', 'package2'],
+            },
+        ],
+    }
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            config_manager = ConfigManager('dummy_filename')
+            _, devices = config_manager.load_config()
+            device = devices[0]
+            assert device.online_upgrade_channel == 'test_stable'
+
+
+def test_load_config_no_online_update_channel():
+    mock_data = {
+        'global': {
+            'backup_dir': '/path/to/backup',
+            'private_key_file': '',
+            'username': 'user',
+            'public_key_file': 'tests/data/test_key.pub',
+            'public_key_owner': 'owner',
+            'port': 333,
+            'log_dir': '/path/to/log',
+            'reboot_timeout': 240,
+            'delete_backup_after_download': True,
+        },
+        'devices': [
+            {
+                'name': 'device1',
+                'address': '192.168.1.1',
+                'username': 'device_user',
+                'port': 2222,
+                'upgrade_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -237,3 +271,68 @@ def test_load_config_no_online_update_channel_in_dev():
             _, devices = config_manager.load_config()
             device = devices[0]
             assert device.online_upgrade_channel == 'stable'
+
+
+def test_load_config_no_upgrade_type_in_dev():
+    mock_data = {
+        'global': {
+            'backup_dir': '/path/to/backup',
+            'private_key_file': '',
+            'username': 'user',
+            'public_key_file': 'tests/data/test_key.pub',
+            'public_key_owner': 'owner',
+            'port': 333,
+            'log_dir': '/path/to/log',
+            'reboot_timeout': 240,
+            'delete_backup_after_download': True,
+            'online_upgrade_channel': 'test_stable',
+            'upgrade_type': 'test_manual',
+        },
+        'devices': [
+            {
+                'name': 'device1',
+                'address': '192.168.1.1',
+                'username': 'device_user',
+                'port': 2222,
+                'packages': ['package1', 'package2'],
+            },
+        ],
+    }
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            config_manager = ConfigManager('dummy_filename')
+            _, devices = config_manager.load_config()
+            device = devices[0]
+            assert device.upgrade_type == 'test_manual'
+
+
+def test_load_config_no_upgrade_type():
+    mock_data = {
+        'global': {
+            'backup_dir': '/path/to/backup',
+            'private_key_file': '',
+            'username': 'user',
+            'public_key_file': 'tests/data/test_key.pub',
+            'public_key_owner': 'owner',
+            'port': 333,
+            'log_dir': '/path/to/log',
+            'reboot_timeout': 240,
+            'delete_backup_after_download': True,
+            'online_upgrade_channel': 'test_stable',
+        },
+        'devices': [
+            {
+                'name': 'device1',
+                'address': '192.168.1.1',
+                'username': 'device_user',
+                'port': 2222,
+                'packages': ['package1', 'package2'],
+            },
+        ],
+    }
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            config_manager = ConfigManager('dummy_filename')
+            _, devices = config_manager.load_config()
+            device = devices[0]
+            assert device.upgrade_type == 'online'

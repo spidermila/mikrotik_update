@@ -33,6 +33,7 @@ class ConfigManager:
             'delete_backup_after_download',
         )
         cfg.online_upgrade_channel = gl.get('online_upgrade_channel')
+        cfg.upgrade_type = gl.get('upgrade_type')
 
         devs = data['devices']
         for dev in devs:
