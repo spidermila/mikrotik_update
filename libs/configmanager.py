@@ -97,7 +97,7 @@ class ConfigManager:
                 data = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
-                return False
+                raise
         ok = True
         if 'global' not in data:
             print('Config file missing the "global" section')
