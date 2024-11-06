@@ -1,17 +1,17 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/spidermila/mikrotik_upgrade/main.svg)](https://results.pre-commit.ci/latest/github/spidermila/mikrotik_upgrade/main)
 
 # mikrotik_upgrade
-A command line tool to simplify update of a fleet of Mikrotik devices.
-The script will first perform a backup of the device and download
-it to a local directory. The upgrade is performed only if
+A command line tool which automates the RouterOS update on a fleet of Mikrotik devices.
+The tool will first perform a backup of the device and download
+it to a local directory. The update is performed only if
 the backup and download are successful.
 
-The script uses **ssh key** to authenticate with the Mikrotik device.
-You need to generate the ssh key pair before using this program.
+The tool uses **ssh key** to authenticate with the Mikrotik device.
+You need to generate the ssh key pair before using this tool.
 I expect there will be a dedicated user created for this purpose.
-The script can set up this user and upload the public key for you.
+The tool can set up this user and upload the public key for you.
 
-If the ssh authentication fails, the script will prompt for a user
+If the ssh authentication fails, the tool will prompt for a user
 and password of an existing user and attempt to create the script user.
 It will also upload an existing public key to the device and associate
 it to the script user.
