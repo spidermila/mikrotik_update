@@ -5,7 +5,7 @@ from unittest.mock import patch
 from libs.config import Config
 
 
-def test_config_initialization():
+def test_config_init():
     with patch('paramiko.Ed25519Key.from_private_key_file') as mock_key:
         mock_key.return_value = MagicMock()
         config = Config(
