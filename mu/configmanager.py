@@ -1,17 +1,9 @@
-try:
-    import yaml
-except (NameError, ModuleNotFoundError):
-    import sys
-    print('PyYAML is needed for this program.')
-    raise ImportError(
-        'PyYAML is needed for this program.\n'
-        f'Install it: {sys.executable} -m pip install PyYAML',
-    )
-
 from typing import List
 
-from libs.config import Config
-from libs.device import Device
+import yaml
+
+from mu.config import Config
+from mu.device import Device
 
 
 class ConfigManager:
@@ -41,6 +33,7 @@ class ConfigManager:
             'delete_backup_after_download',
         )
         cfg.online_upgrade_channel = gl.get('online_upgrade_channel')
+        cfg.upgrade_type = gl.get('upgrade_type')
 
         devs = data['devices']
         for dev in devs:
@@ -104,7 +97,7 @@ class ConfigManager:
                 data = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
-                return False
+                raise
         ok = True
         if 'global' not in data:
             print('Config file missing the "global" section')
@@ -148,4 +141,7 @@ class ConfigManager:
                             print('Missing mandatory device options:')
                             for mo in missing_options:
                                 print(mo)
+            else:
+                print('No devices specified!')
+                ok = False
         return ok

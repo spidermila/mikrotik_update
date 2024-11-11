@@ -5,7 +5,7 @@ from datetime import datetime
 class Logger:
     def __init__(
             self,
-            log_dir_str: str | None,
+            log_dir_str: str = '',
             file_name: str = 'mikrotik_update.log',
     ) -> None:
         if not log_dir_str:
@@ -13,7 +13,7 @@ class Logger:
         else:
             log_dir = pathlib.Path(log_dir_str)
             log_dir.mkdir(parents=True, exist_ok=True)
-        self.log_file = log_dir / file_name
+        self.log_file = pathlib.Path.joinpath(log_dir, file_name)
 
     def log(
             self,

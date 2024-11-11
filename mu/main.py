@@ -1,12 +1,15 @@
 import argparse
+import importlib.metadata
 import os
+from collections.abc import Sequence
 
-from libs.configmanager import ConfigManager
-from libs.logger import Logger
-from libs.version import __version__
+from mu.configmanager import ConfigManager
+from mu.logger import Logger
+
+VERSION_STR = importlib.metadata.version('mu')
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         add_help=False,
         prog='Mikrotik Upgrade',
@@ -34,7 +37,7 @@ def main() -> int:
         '--version',
         help='Display the program version',
         action='version',
-        version=f'%(prog)s version {__version__}',
+        version=f'%(prog)s version {VERSION_STR}',
     )
     args = parser.parse_args()
     configuration_file = args.configuration_file

@@ -13,7 +13,7 @@ class Config:
         self.public_key_file: str | None = None
         self.public_key_owner: str | None = None
         self.port: int | None = None
-        self.log_dir: str | None = None
+        self.log_dir: str = ''
         self.delete_backup_after_download = False
         self.upgrade_type = 'online'
         self.online_upgrade_channel = 'stable'
