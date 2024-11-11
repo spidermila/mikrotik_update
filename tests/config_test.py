@@ -17,7 +17,7 @@ def test_config_init():
         assert config.public_key_file is None
         assert config.public_key_owner is None
         assert config.port is None
-        assert config.log_dir is None
+        assert config.log_dir == ''
         assert config.delete_backup_after_download is False
         assert config.upgrade_type == 'online'
         assert config.online_upgrade_channel == 'stable'
@@ -34,7 +34,7 @@ def test_config_without_private_key():
     assert config.public_key_file is None
     assert config.public_key_owner is None
     assert config.port is None
-    assert config.log_dir is None
+    assert config.log_dir == ''
     assert config.delete_backup_after_download is False
     assert config.upgrade_type == 'online'
     assert config.online_upgrade_channel == 'stable'
