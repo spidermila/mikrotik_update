@@ -1,4 +1,5 @@
 import argparse
+import configparser
 import importlib.metadata
 import os
 from collections.abc import Sequence
@@ -6,7 +7,12 @@ from collections.abc import Sequence
 from mu.configmanager import ConfigManager
 from mu.logger import Logger
 
-VERSION_STR = importlib.metadata.version('mu')
+try:
+    VERSION_STR = importlib.metadata.version('mu')
+except importlib.metadata.PackageNotFoundError:
+    config = configparser.ConfigParser()
+    config.read(os.path.join(os.path.dirname(__file__), '..', 'setup.cfg'))
+    VERSION_STR = config['metadata']['version']
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -35,6 +35,7 @@ Options:
 
 ## How to use the python script
 I recommend to use virtualenv or venv and install the prerequisites there.
+The script shall be used as a python module with the `-m` option.
 
 Prerequisites:
 ```bash
@@ -43,7 +44,7 @@ python3 -m pip install -r requirements.txt
 
 Usage:
 ```bash
-python mu.py sample.yaml
+python -m mu sample.yaml
 ```
 
 Options:
