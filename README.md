@@ -1,6 +1,6 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/spidermila/mikrotik_upgrade/main.svg)](https://results.pre-commit.ci/latest/github/spidermila/mikrotik_upgrade/main)
 
-# mikrotik_upgrade
+# mikrotik_update
 A command line tool which automates the RouterOS update on a fleet of Mikrotik devices.
 The tool will first perform a backup of the device and download
 it to a local directory. The update is performed only if
@@ -93,4 +93,4 @@ devices: # your fleet of Mikrotik devices
             - /home/test_user/mikrotik_upgrade/packages/routeros-7.14.1-mipsbe.npk
 ```
 
-The tool will backup the configuration, download the backup file and upgrade the device.
+The tool will backup the configuration, download the backup file and update the device.
