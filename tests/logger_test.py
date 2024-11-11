@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from libs.logger import Logger
+from mu.logger import Logger
 
 
 @pytest.fixture(scope='session')

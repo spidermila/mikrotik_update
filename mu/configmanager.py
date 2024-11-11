@@ -2,8 +2,8 @@ from typing import List
 
 import yaml
 
-from libs.config import Config
-from libs.device import Device
+from mu.config import Config
+from mu.device import Device
 
 
 class ConfigManager:

@@ -2,7 +2,7 @@ import pathlib
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from libs.config import Config
+from mu.config import Config
 
 
 def test_config_init():

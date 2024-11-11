@@ -8,6 +8,10 @@ repos:
     -   id: check-yaml
     -   id: debug-statements
     -   id: double-quote-string-fixer
+-   repo: https://github.com/asottile/setup-cfg-fmt
+    rev: v2.7.0
+    hooks:
+    -   id: setup-cfg-fmt
 -   repo: https://github.com/PyCQA/flake8
     rev: 7.1.1
     hooks:
@@ -30,6 +34,6 @@ repos:
     rev: v1.13.0
     hooks:
     -   id: mypy
-        additional_dependencies: [types-PyYAML, types-paramiko, pytest]
+        additional_dependencies: [types-PyYAML, types-paramiko, types-setuptools, pytest]
         args:
         - --explicit-package-bases

@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from libs.config import Config
-from libs.device import Device
-from libs.logger import Logger
+from mu.config import Config
+from mu.device import Device
+from mu.logger import Logger
 # from unittest.mock import mock_open
 # from unittest.mock import patch
 

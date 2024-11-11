@@ -21,7 +21,6 @@ class Config:
         self.backup_dir = pathlib.Path(backup_dir)
         self.private_key_file = private_key_file
         if len(self.private_key_file) > 0:
-            print(self.private_key_file)
             self.key = paramiko.Ed25519Key.from_private_key_file(
                 self.private_key_file,
             )

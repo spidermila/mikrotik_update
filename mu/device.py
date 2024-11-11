@@ -7,9 +7,9 @@ from timeit import default_timer
 import paramiko
 from scp import SCPClient  # type: ignore
 
-from libs.config import Config
-from libs.logger import Logger
-from libs.userregistrator import UserRegistrator
+from mu.config import Config
+from mu.logger import Logger
+from mu.userregistrator import UserRegistrator
 # paramiko.common.logging.basicConfig(level=paramiko.common.DEBUG)
 
 

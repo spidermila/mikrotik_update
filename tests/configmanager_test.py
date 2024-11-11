@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from libs.configmanager import ConfigManager
+from mu.configmanager import ConfigManager
 # from unittest.mock import MagicMock
 
 
