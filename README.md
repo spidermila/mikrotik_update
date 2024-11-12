@@ -16,24 +16,20 @@ and password of an existing user and attempt to create the script user.
 It will also upload an existing public key to the device and associate
 it to the script user.
 
-## How to use the compiled binary file
-The released versions contain compiled executable files for Linux and Windows, which can be used directly.
+## How to install as a package
+I recommend to use virtualenv or venv.
 ```bash
-./mu sample.yaml
-```
-or
-```bash
-mu.exe sample.yaml
+pip install .
 ```
 
-Options:
-```
--V --version     Show version
--h --help        Help
--D --dry-run     Only check configuration and test connectivity to devices without performing the update
+Once the package is installed, run it:
+
+```bash
+mu sample.yaml
 ```
 
-## How to use the python script
+
+## How to use the python script as a module
 I recommend to use virtualenv or venv and install the prerequisites there.
 The script shall be used as a python module with the `-m` option.
 
@@ -47,7 +43,7 @@ Usage:
 python -m mu sample.yaml
 ```
 
-Options:
+## Options
 ```
 -V --version     Show version
 -h --help        Help
