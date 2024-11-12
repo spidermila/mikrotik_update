@@ -19,7 +19,7 @@ class Device:
     Most of the properties are loaded from the configuration file.
     \n
     The class contains methods to communicate with the device,
-    fetch information, perform backup and upgrade.
+    fetch information, perform backup and update.
     """
     def __init__(
             self,
@@ -28,7 +28,7 @@ class Device:
             address: str,
             port: int,
             username: str,
-            upgrade_type: str,
+            update_type: str,
             packages: list[str | None] = [],
     ) -> None:
         self.conf = conf
@@ -36,9 +36,9 @@ class Device:
         self.address = address
         self.port = port
         self.username = username
-        self.upgrade_type = upgrade_type
+        self.update_type = update_type
         self.packages = packages
-        self.online_upgrade_channel = 'stable'
+        self.online_update_channel = 'stable'
         self.client: paramiko.SSHClient | None = None
         self.identity = ''
         self.public_key_file: str | None = None
@@ -210,8 +210,8 @@ class Device:
     def refresh_update_info(self, logger: Logger) -> None:
         """
         Connects to the device using ssh_call,
-        sets the desired online upgrade channel
-        (self.online_upgrade_channel) and runs the
+        sets the desired online update channel
+        (self.online_update_channel) and runs the
         "system package update check-for-updates" command.
         Then updates the following properties with the result: \n
         self.update_available (bool - update available)\n
@@ -226,8 +226,8 @@ class Device:
         # set desired channel
         set_back_channel = False
         original_channel = self._get_channel()
-        if original_channel != self.online_upgrade_channel:
-            self._set_channel(logger, self.online_upgrade_channel)
+        if original_channel != self.online_update_channel:
+            self._set_channel(logger, self.online_update_channel)
             set_back_channel = True
         output = self.ssh_call('system package update check-for-updates')
         for line in output:
@@ -407,46 +407,46 @@ class Device:
             ssh.close()
             return True
 
-    def upgrade(self, logger: Logger) -> None:
-        """Wrapper method to trigger both online and manual upgrades."""
+    def update(self, logger: Logger) -> None:
+        """Wrapper method to trigger both online and manual updates."""
         if not self.client:
             print('SSH not connected')
             raise SystemExit(1)
 
-        # online upgrade from Internet and reboot
-        if self.upgrade_type == 'online':
+        # online update from Internet and reboot
+        if self.update_type == 'online':
             logger.log(
                 severity='info',
                 device=self.name,
-                msg='online upgrade',
+                msg='online update',
                 stdout=True,
             )
             # check channel
-            if self._get_channel() != self.online_upgrade_channel:
+            if self._get_channel() != self.online_update_channel:
                 print(
                     'setting desired online update channel' +
-                    f' {self.online_upgrade_channel}',
+                    f' {self.online_update_channel}',
                 )
                 logger.log(
                     'info',
                     self.name,
                     'setting desired online update channel' +
-                    f' {self.online_upgrade_channel}',
+                    f' {self.online_update_channel}',
                     stdout=True,
                 )
                 # set channel
-                self._set_channel(logger, self.online_upgrade_channel)
+                self._set_channel(logger, self.online_update_channel)
                 time.sleep(1)
             # check update
             self.refresh_update_info(logger=logger)
-            self._online_upgrade(logger=logger)
+            self._online_update(logger=logger)
 
-        # Manual upgrade - will upload packages to device and reboot it
-        if self.upgrade_type == 'manual':
+        # Manual update - will upload packages to device and reboot it
+        if self.update_type == 'manual':
             logger.log(
                 severity='info',
                 device=self.name,
-                msg='manual upgrade',
+                msg='manual update',
                 stdout=True,
             )
             installed = self.get_installed_packages(logger=logger)
@@ -456,7 +456,7 @@ class Device:
                 msg=f'installed packages {installed}',
                 stdout=True,
             )
-            self._manual_upgrade(logger=logger)
+            self._manual_update(logger=logger)
 
     def version_is_lower(self, ver_a: str, ver_b: str) -> bool:
         """
@@ -547,9 +547,9 @@ class Device:
                     return True
         return False
 
-    def _online_upgrade(self, logger: Logger) -> None:
+    def _online_update(self, logger: Logger) -> None:
         """
-        Perform online upgrade or prints 'update not available'.\n
+        Perform online update or prints 'update not available'.\n
         First downloads the package using self._download_update().
         Then reboots using self.reboot_and_wait().
         """
@@ -620,13 +620,13 @@ class Device:
                 return line.split()[1]
         return ''
 
-    def _manual_upgrade(self, logger: Logger) -> None:
-        """Perform manual upgrade using packages from the local system."""
+    def _manual_update(self, logger: Logger) -> None:
+        """Perform manual update using packages from the local system."""
         if len(self.packages) == 0:
             logger.log(
                 'error',
                 self.name,
-                'manual upgrade selected but no packages provided',
+                'manual update selected but no packages provided',
                 stdout=True,
             )
             return

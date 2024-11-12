@@ -28,7 +28,7 @@ def device():
         address='192.168.1.1',
         port=333,
         username='test-user',
-        upgrade_type='test-upgrade',
+        update_type='test-update',
         packages=['package1', 'package2'],
     )
     return dev
@@ -41,9 +41,9 @@ def test_device_init(device):
     assert device.address == '192.168.1.1'
     assert device.port == 333
     assert device.username == 'test-user'
-    assert device.upgrade_type == 'test-upgrade'
+    assert device.update_type == 'test-update'
     assert device.packages == ['package1', 'package2']
-    assert device.online_upgrade_channel == 'stable'
+    assert device.online_update_channel == 'stable'
     assert device.client is None
     assert device.identity == ''
     assert device.public_key_file is None

@@ -15,8 +15,8 @@ class Config:
         self.port: int | None = None
         self.log_dir: str = ''
         self.delete_backup_after_download = False
-        self.upgrade_type = 'online'
-        self.online_upgrade_channel = 'stable'
+        self.update_type = 'online'
+        self.online_update_channel = 'stable'
         self.reboot_timeout = 240
         self.backup_dir = pathlib.Path(backup_dir)
         self.private_key_file = private_key_file

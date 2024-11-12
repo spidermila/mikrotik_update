@@ -32,8 +32,20 @@ class ConfigManager:
         cfg.delete_backup_after_download = gl.get(
             'delete_backup_after_download',
         )
-        cfg.online_upgrade_channel = gl.get('online_upgrade_channel')
-        cfg.upgrade_type = gl.get('upgrade_type')
+        # renamed online_upgrade_channel to online_update_channel in 1.3.0
+        if gl.get('online_upgrade_channel'):
+            print(
+                'Warning! The online_upgrade_channel option is deprecated! ' +
+                'Use online_update_channel instead.',
+            )
+            print(
+                'Warning! Using value from online_upgrade_channel as ' +
+                'online_update_channel.',
+            )
+            cfg.online_update_channel = gl.get('online_upgrade_channel')
+        else:
+            cfg.online_update_channel = gl.get('online_update_channel')
+        cfg.update_type = gl.get('update_type')
 
         devs = data['devices']
         for dev in devs:
@@ -55,22 +67,22 @@ class ConfigManager:
                 port = cfg.port
             else:
                 port = 22
-            # Use online_upgrade_channel from device, global or stable
-            if 'online_upgrade_channel' in dev:
-                online_upgrade_channel = dev['online_upgrade_channel']
-            elif cfg.online_upgrade_channel:
-                online_upgrade_channel = cfg.online_upgrade_channel
+            # Use online_update_channel from device, global or stable
+            if 'online_update_channel' in dev:
+                online_update_channel = dev['online_update_channel']
+            elif cfg.online_update_channel:
+                online_update_channel = cfg.online_update_channel
             else:
-                online_upgrade_channel = 'stable'
-            # Use upgrade_type from device, global or online
-            if 'upgrade_type' in dev:
-                upgrade_type = dev['upgrade_type']
-            elif cfg.upgrade_type:
-                upgrade_type = cfg.upgrade_type
+                online_update_channel = 'stable'
+            # Use update_type from device, global or online
+            if 'update_type' in dev:
+                update_type = dev['update_type']
+            elif cfg.update_type:
+                update_type = cfg.update_type
             else:
-                upgrade_type = 'online'
-            # load packages if manual upgrade type
-            if upgrade_type == 'manual':
+                update_type = 'online'
+            # load packages if manual update type
+            if update_type == 'manual':
                 packages = dev['packages']
             else:
                 packages = []
@@ -82,10 +94,10 @@ class ConfigManager:
                 address=dev['address'],
                 port=port,
                 username=username,
-                upgrade_type=upgrade_type,
+                update_type=update_type,
                 packages=packages,
             )
-            new_device.online_upgrade_channel = online_upgrade_channel
+            new_device.online_update_channel = online_update_channel
             devices.append(new_device)
         return (cfg, devices)
 

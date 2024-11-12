@@ -18,7 +18,7 @@ except importlib.metadata.PackageNotFoundError:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         add_help=False,
-        prog='Mikrotik Upgrade',
+        prog='Mikrotik Update',
     )
     parser.add_argument(
         '-h',
@@ -63,13 +63,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if d.ssh_test():
             d.ssh_connect()
             if args.dry_run:
-                if d.upgrade_type == 'manual':
+                if d.update_type == 'manual':
                     installed = d.get_installed_packages(logger)
                     logger.log(
                         'info',
                         d.name,
-                        'manual upgrade. installed packages: ' +
-                        f'{installed}, packages to upgrade: {d.packages}',
+                        'manual update. installed packages: ' +
+                        f'{installed}, packages to update: {d.packages}',
                         stdout=True,
                     )
                 else:
@@ -81,7 +81,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         stdout=True,
                     )
             else:
-                d.upgrade(logger=logger)
+                d.update(logger=logger)
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")
