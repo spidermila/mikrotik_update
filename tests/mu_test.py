@@ -6,7 +6,7 @@ import pytest
 @pytest.mark.parametrize(
     'stdout, arg, expected_output', [
         (True, '--help', 'Show this help'),
-        (True, '--version', 'Mikrotik Upgrade version'),
+        (True, '--version', 'Mikrotik Update version'),
         (
             True,
             'non_existing_file.yaml',
@@ -15,15 +15,15 @@ import pytest
         (
             False,
             '--dry-run',
-            'usage: Mikrotik Upgrade [-h] [-D] [-V] configuration_file\n' +
-            'Mikrotik Upgrade: error: the following arguments are required: ' +
+            'usage: Mikrotik Update [-h] [-D] [-V] configuration_file\n' +
+            'Mikrotik Update: error: the following arguments are required: ' +
             'configuration_file\n',
         ),
     ],
 )
 def test_mu_parameters(stdout, arg, expected_output):
     result = subprocess.run(
-        ['python3', 'mu.py'] + arg.split(),
+        ['python3', '-m', 'mu'] + arg.split(),
         capture_output=True,
         text=True,
     )

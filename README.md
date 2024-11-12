@@ -1,4 +1,4 @@
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/spidermila/mikrotik_upgrade/main.svg)](https://results.pre-commit.ci/latest/github/spidermila/mikrotik_upgrade/main)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/spidermila/mikrotik_update/main.svg)](https://results.pre-commit.ci/latest/github/spidermila/mikrotik_update/main)
 
 # mikrotik_update
 A command line tool which automates the RouterOS update on a fleet of Mikrotik devices.
@@ -30,7 +30,7 @@ Options:
 ```
 -V --version     Show version
 -h --help        Help
--D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
+-D --dry-run     Only check configuration and test connectivity to devices without performing the update
 ```
 
 ## How to use the python script
@@ -51,29 +51,29 @@ Options:
 ```
 -V --version     Show version
 -h --help        Help
--D --dry-run     Only check configuration and test connectivity to devices without performing the upgrade
+-D --dry-run     Only check configuration and test connectivity to devices without performing the update
 ```
 
 ## Example yaml file
 ```yaml
 global: # global settings
-    log_dir: /home/test_user/mikrotik_upgrade # local dicrectory where log file will be stored
-    backup_dir: /home/test_user/mikrotik_upgrade/backups # local directory where backup files will be stored
-    username: upgrade_user # script user on the Mikrotik device
+    log_dir: /home/test_user/mikrotik_update # local dicrectory where log file will be stored
+    backup_dir: /home/test_user/mikrotik_update/backups # local directory where backup files will be stored
+    username: update_user # script user on the Mikrotik device
     private_key_file: /home/test_user/.ssh/id_ed25519 # private key which will be used for authentication
     public_key_file: /home/test_user/.ssh/id_ed25519.pub # public key which will be uploaded to the device, if needed
     public_key_owner: test_user@homePC # this string will be stored on the device along with the key
     port: 22 # ssh port of the devices
     delete_backup_after_download: False # delete the backup file on the Mikrotik device once it's downloaded to backup_dir
-    online_upgrade_channel: stable # [stable, testing, development, long term]
+    online_update_channel: stable # [stable, testing, development, long term]
     reboot_timeout: 200 # seconds, 240 is default
 devices: # your fleet of Mikrotik devices
     -   name: main_router # mandatory, mainly for logging
         address: 192.168.1.1 # mandatory
         port: 22 # optional if specified globally
-        username: main_router_upgrade_user # optional
-        upgrade_type: online # optional, default is online, [online, manual]
-        online_upgrade_channel: stable # optional, stable is default, [stable, testing, development, long term]
+        username: main_router_update_user # optional
+        update_type: online # optional, default is online, [online, manual]
+        online_update_channel: stable # optional, stable is default, [stable, testing, development, long term]
     -   name: ap1
         address: 192.168.1.2
         port: 23 # setting this on the device level has a higher priority over the global settings
@@ -81,16 +81,16 @@ devices: # your fleet of Mikrotik devices
         address: 192.168.1.3
     -   name: ap2
         address: 192.168.1.4
-        upgrade_type: manual
+        update_type: manual
         packages:
-            - /home/test_user/mikrotik_upgrade/packages/routeros-7.15beta9-mipsbe.npk
-            - /home/test_user/mikrotik_upgrade/packages/wireless-7.15beta9-mipsbe.npk
+            - /home/test_user/mikrotik_update/packages/routeros-7.15beta9-mipsbe.npk
+            - /home/test_user/mikrotik_update/packages/wireless-7.15beta9-mipsbe.npk
     -   name: ap3
         address: 192.168.1.5
-        upgrade_type: manual
+        update_type: manual
         packages:
-            - /home/test_user/mikrotik_upgrade/packages/wireless-7.14.1-mipsbe.npk
-            - /home/test_user/mikrotik_upgrade/packages/routeros-7.14.1-mipsbe.npk
+            - /home/test_user/mikrotik_update/packages/wireless-7.14.1-mipsbe.npk
+            - /home/test_user/mikrotik_update/packages/routeros-7.14.1-mipsbe.npk
 ```
 
 The tool will backup the configuration, download the backup file and update the device.

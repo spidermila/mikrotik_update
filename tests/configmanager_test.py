@@ -26,8 +26,8 @@ def test_load_config_success():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
-            'upgrade_type': 'cfg-manual',
+            'online_update_channel': 'stable',
+            'update_type': 'cfg-manual',
         },
         'devices': [
             {
@@ -35,8 +35,8 @@ def test_load_config_success():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'port': 2222,
-                'online_upgrade_channel': 'beta',
-                'upgrade_type': 'dev-manual',
+                'online_update_channel': 'beta',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -56,8 +56,8 @@ def test_load_config_success():
             assert cfg.log_dir == '/path/to/log'
             assert cfg.reboot_timeout == 240
             assert cfg.delete_backup_after_download is True
-            assert cfg.online_upgrade_channel == 'stable'
-            assert cfg.upgrade_type == 'cfg-manual'
+            assert cfg.online_update_channel == 'stable'
+            assert cfg.update_type == 'cfg-manual'
 
             assert len(devices) == 1
             device = devices[0]
@@ -65,8 +65,8 @@ def test_load_config_success():
             assert device.address == '192.168.1.1'
             assert device.username == 'device_user'
             assert device.port == 2222
-            assert device.online_upgrade_channel == 'beta'
-            assert device.upgrade_type == 'dev-manual'
+            assert device.online_update_channel == 'beta'
+            assert device.update_type == 'dev-manual'
             assert device.packages == []
 
 
@@ -90,15 +90,15 @@ def test_load_config_username_not_in_devices():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
+            'online_update_channel': 'stable',
         },
         'devices': [
             {
                 'name': 'device1',
                 'address': '192.168.1.1',
                 'port': 2222,
-                'online_upgrade_channel': 'beta',
-                'upgrade_type': 'dev-manual',
+                'online_update_channel': 'beta',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -122,15 +122,15 @@ def test_load_config_no_username(capsys):
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
+            'online_update_channel': 'stable',
         },
         'devices': [
             {
                 'name': 'device1',
                 'address': '192.168.1.1',
                 'port': 2222,
-                'online_upgrade_channel': 'beta',
-                'upgrade_type': 'dev-manual',
+                'online_update_channel': 'beta',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -155,15 +155,15 @@ def test_load_config_prt_not_in_devices():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
+            'online_update_channel': 'stable',
         },
         'devices': [
             {
                 'name': 'device1',
                 'address': '192.168.1.1',
                 'username': 'device_user',
-                'online_upgrade_channel': 'beta',
-                'upgrade_type': 'dev-manual',
+                'online_update_channel': 'beta',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -187,15 +187,15 @@ def test_load_config_no_port():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'stable',
+            'online_update_channel': 'stable',
         },
         'devices': [
             {
                 'name': 'device1',
                 'address': '192.168.1.1',
                 'username': 'device_user',
-                'online_upgrade_channel': 'beta',
-                'upgrade_type': 'dev-manual',
+                'online_update_channel': 'beta',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -220,7 +220,7 @@ def test_load_config_no_online_update_channel_in_dev():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'test_stable',
+            'online_update_channel': 'test_stable',
         },
         'devices': [
             {
@@ -228,7 +228,7 @@ def test_load_config_no_online_update_channel_in_dev():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'port': 2222,
-                'upgrade_type': 'dev-manual',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -238,7 +238,7 @@ def test_load_config_no_online_update_channel_in_dev():
             config_manager = ConfigManager('dummy_filename')
             _, devices = config_manager.load_config()
             device = devices[0]
-            assert device.online_upgrade_channel == 'test_stable'
+            assert device.online_update_channel == 'test_stable'
 
 
 def test_load_config_no_online_update_channel():
@@ -260,7 +260,7 @@ def test_load_config_no_online_update_channel():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'port': 2222,
-                'upgrade_type': 'dev-manual',
+                'update_type': 'dev-manual',
                 'packages': ['package1', 'package2'],
             },
         ],
@@ -270,10 +270,10 @@ def test_load_config_no_online_update_channel():
             config_manager = ConfigManager('dummy_filename')
             _, devices = config_manager.load_config()
             device = devices[0]
-            assert device.online_upgrade_channel == 'stable'
+            assert device.online_update_channel == 'stable'
 
 
-def test_load_config_no_upgrade_type_in_dev():
+def test_load_config_no_update_type_in_dev():
     mock_data = {
         'global': {
             'backup_dir': '/path/to/backup',
@@ -285,8 +285,8 @@ def test_load_config_no_upgrade_type_in_dev():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'test_stable',
-            'upgrade_type': 'test_manual',
+            'online_update_channel': 'test_stable',
+            'update_type': 'test_manual',
         },
         'devices': [
             {
@@ -303,10 +303,10 @@ def test_load_config_no_upgrade_type_in_dev():
             config_manager = ConfigManager('dummy_filename')
             _, devices = config_manager.load_config()
             device = devices[0]
-            assert device.upgrade_type == 'test_manual'
+            assert device.update_type == 'test_manual'
 
 
-def test_load_config_no_upgrade_type():
+def test_load_config_no_update_type():
     mock_data = {
         'global': {
             'backup_dir': '/path/to/backup',
@@ -318,7 +318,7 @@ def test_load_config_no_upgrade_type():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'test_stable',
+            'online_update_channel': 'test_stable',
         },
         'devices': [
             {
@@ -335,10 +335,10 @@ def test_load_config_no_upgrade_type():
             config_manager = ConfigManager('dummy_filename')
             _, devices = config_manager.load_config()
             device = devices[0]
-            assert device.upgrade_type == 'online'
+            assert device.update_type == 'online'
 
 
-def test_load_config_upgrade_type_manual_packages():
+def test_load_config_update_type_manual_packages():
     mock_data = {
         'global': {
             'backup_dir': '/path/to/backup',
@@ -350,7 +350,7 @@ def test_load_config_upgrade_type_manual_packages():
             'log_dir': '/path/to/log',
             'reboot_timeout': 240,
             'delete_backup_after_download': True,
-            'online_upgrade_channel': 'test_stable',
+            'online_update_channel': 'test_stable',
         },
         'devices': [
             {
@@ -358,7 +358,7 @@ def test_load_config_upgrade_type_manual_packages():
                 'address': '192.168.1.1',
                 'username': 'device_user',
                 'port': 2222,
-                'upgrade_type': 'manual',
+                'update_type': 'manual',
                 'packages': ['package1', 'package2'],
             },
         ],
