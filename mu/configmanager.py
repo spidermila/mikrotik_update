@@ -32,7 +32,8 @@ class ConfigManager:
         cfg.delete_backup_after_download = gl.get(
             'delete_backup_after_download',
         )
-        # renamed online_upgrade_channel to online_update_channel in 1.3.0
+
+        # renamed online_upgrade_channel to online_update_channel in 1.2.0
         if gl.get('online_upgrade_channel'):
             print(
                 'Warning! The online_upgrade_channel option is deprecated! ' +
