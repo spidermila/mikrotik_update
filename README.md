@@ -6,6 +6,8 @@ The tool will first perform a backup of the device and download
 it to a local directory. The update is performed only if
 the backup and download are successful.
 
+The above default behaviour can be overriden by the -U or -B options.
+
 The tool uses **ssh key** to authenticate with the Mikrotik device.
 You need to generate the ssh key pair before using this tool.
 I expect there will be a dedicated user created for this purpose.
@@ -47,10 +49,13 @@ python -m mu sample.yaml
 ```
 -V, --version         Show version
 -h, --help            Help
--D, --dry-run         Only check configuration and test connectivity to devices without performing the update
+-D, --dry-run         Only check configuration and test connectivity to devices
+                      without performing the backup and update.
 -U, --update-only     Only perform update.
 -B, --backup-only     Only perform backup and download the backup file.
--d DEVICE_NAME        Specify device name(s) as per your configuration file. Can be used multiple times to specify multiple devices.
+-d DEVICE_NAME        Specify device name(s) as per your configuration file.
+                      Can be used multiple times to specify multiple devices.
+                      If no device specified, all devices will be used.
 ```
 
 ## Example yaml file
