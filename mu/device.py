@@ -560,9 +560,6 @@ class Device:
                 self.version_info_str,
                 stdout=True,
             )
-            # run backup
-            if not self.backup(logger=logger):
-                return
             logger.log(
                 'info',
                 self.name,
@@ -671,9 +668,6 @@ class Device:
                     stdout=True,
                 )
                 return
-        # run backup
-        if not self.backup(logger=logger):
-            return
         if not self.reboot_and_wait(logger, downgrade=do_downgrade):
             return
         self.ssh_connect()
