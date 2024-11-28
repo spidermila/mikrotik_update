@@ -18,7 +18,7 @@ except importlib.metadata.PackageNotFoundError:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         add_help=False,
-        prog='Mikrotik Update',
+        prog='mu',
     )
     parser.add_argument(
         '-h',
@@ -37,6 +37,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         '--check-only',
         help='Only check the updates. Do not perform backup and update.',
         action='store_true',
+    )
+    single_action_group = parser.add_mutually_exclusive_group()
+    single_action_group.add_argument(
+        '-U',
+        '--update-only',
+        help='Only perform update.',
+        action='store_true',
+    )
+    single_action_group.add_argument(
+        '-B',
+        '--backup-only',
+        help='Only perform backup and download the backup file.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '-d',
+        dest='device_name',
+        help='Specify device name(s) as per your configuration file.' +
+        ' Can be used multiple times to specify multiple devices.',
+        action='append',
     )
     parser.add_argument(
         '-V',
@@ -59,6 +79,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.log('info', 'script', '=======DRYRUN started=======')
     else:
         logger.log('info', 'script', '=======script started=======')
+    if args.device_name:
+        devices_in_scope = []
+        for device_name in args.device_name:
+            found = False
+            for device in devices:
+                if device.name == device_name:
+                    devices_in_scope.append(device)
+                    found = True
+                    continue
+            if not found:
+                print(f'Device {device_name} not found in configuration file!')
+                return 1
+        devices = devices_in_scope
     for d in devices:
         if d.ssh_test():
             d.ssh_connect()
