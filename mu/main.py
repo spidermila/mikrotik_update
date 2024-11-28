@@ -114,7 +114,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         stdout=True,
                     )
             else:
-                d.update(logger=logger)
+                if not args.update_only:
+                    d.backup(logger=logger)
+                if not args.backup_only:
+                    d.update(logger=logger)
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")
