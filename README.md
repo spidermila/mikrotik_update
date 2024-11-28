@@ -45,9 +45,12 @@ python -m mu sample.yaml
 
 ## Options
 ```
--V --version     Show version
--h --help        Help
--D --dry-run     Only check configuration and test connectivity to devices without performing the update
+-V, --version         Show version
+-h, --help            Help
+-D, --dry-run         Only check configuration and test connectivity to devices without performing the update
+-U, --update-only     Only perform update.
+-B, --backup-only     Only perform backup and download the backup file.
+-d DEVICE_NAME        Specify device name(s) as per your configuration file. Can be used multiple times to specify multiple devices.
 ```
 
 ## Example yaml file
