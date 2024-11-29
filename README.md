@@ -96,5 +96,3 @@ devices: # your fleet of Mikrotik devices
             - /home/test_user/mikrotik_update/packages/wireless-7.14.1-mipsbe.npk
             - /home/test_user/mikrotik_update/packages/routeros-7.14.1-mipsbe.npk
 ```
-
-The tool will backup the configuration, download the backup file and update the device.
