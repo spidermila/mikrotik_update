@@ -29,6 +29,7 @@ class Device:
             port: int,
             username: str,
             update_type: str,
+            logger: Logger,
             packages: list[str | None] = [],
     ) -> None:
         self.conf = conf
@@ -37,6 +38,7 @@ class Device:
         self.port = port
         self.username = username
         self.update_type = update_type
+        self.logger = logger
         self.packages = packages
         self.online_update_channel = 'stable'
         self.client: paramiko.SSHClient | None = None
@@ -48,36 +50,44 @@ class Device:
         self.version_info_str = f'installed: {self.installed_version}, ' +\
                                 f'available: {self.latest_version}'
 
-    def backup(self, logger: Logger) -> bool:
+    def _ssh_check(self) -> None:
+        if not self.client:
+            self.logger.log(
+                'error',
+                self.name,
+                'SSH not connected',
+                stdout=True,
+            )
+            raise SystemExit(1)
+
+    def backup(self) -> bool:
         """
         Perform backup to a file.
         File name format: "identity-yyyymmdd-hhmm.backup" \n
         File name stored to self.backup_file_full_name variable.
         """
         # create backup
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         now = datetime.now()
         timestamp = now.strftime('%Y%m%d-%H%M')
         backup_file_name = f'{self.identity}-{timestamp}'
         self.backup_file_full_name = backup_file_name + '.backup'
-        logger.log(
+        self.logger.log(
             'info',
             self.name,
             f'running backup to file {self.backup_file_full_name}',
         )
         output = self.ssh_call(f'system backup save name={backup_file_name}')
         if 'Configuration backup saved\r' not in output:
-            print(output)
-            logger.log(
+            self.logger.log(
                 'error',
                 self.name,
                 f'backup failed: {output}',
+                stdout=True,
             )
             return False
         else:
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 f'backup saved to {self.backup_file_full_name}',
@@ -85,30 +95,32 @@ class Device:
             )
         # download backup
         self.conf.backup_dir.mkdir(parents=True, exist_ok=True)
-        logger.log(
+        self.logger.log(
             'info',
             self.name,
             f'downloading backup file to {self.conf.backup_dir}',
         )
         try:
+            if not self.client:
+                raise
             with SCPClient(self.client.get_transport()) as scp:
                 scp.get(self.backup_file_full_name, self.conf.backup_dir)
         except Exception as e:
-            logger.log(
+            self.logger.log(
                 'error',
                 self.name,
                 f'{e}',
                 stdout=True,
             )
             return False
-        logger.log(
+        self.logger.log(
             'info',
             self.name,
             f'backup downloaded to {self.conf.backup_dir}',
             stdout=True,
         )
         if self.conf.delete_backup_after_download:
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 'deleting backup on device',
@@ -125,7 +137,7 @@ class Device:
         for line in self.ssh_call(remote_cmd):
             print(line)
 
-    def get_installed_packages(self, logger: Logger) -> list[str]:
+    def get_installed_packages(self) -> list[str]:
         """
         Get the list of installed packages on the device,
         format the information as "packagename version"
@@ -133,9 +145,7 @@ class Device:
         example: \n
         ['wireless 7.15beta9', 'routeros 7.15beta9']
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = self.ssh_call('system package print')
         if len(output) < 2:
             return []
@@ -147,18 +157,16 @@ class Device:
                     result.append(' '.join(elements[1:3]))
         return result
 
-    def get_update_available(self, logger: Logger) -> bool:
+    def get_update_available(self) -> bool:
         """
         Runs the self.refresh_update_info() method
         and returns self.update_available property.
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
-        self.refresh_update_info(logger=logger)
+        self._ssh_check()
+        self.refresh_update_info()
         return self.update_available
 
-    def reboot_and_wait(self, logger: Logger, downgrade=False) -> bool:
+    def reboot_and_wait(self, downgrade=False) -> bool:
         """
         Runs self._downgrade() or self._reboot() depending on the value
         of the "downgrade" parameter. \n
@@ -167,14 +175,14 @@ class Device:
         self.conf.reboot_timeout runs out.
         """
         if downgrade:
-            logger.log(
+            self.logger.log(
                         'info',
                         self.name,
                         'rebooting (downgrade)',
                         stdout=True,
             )
         else:
-            logger.log(
+            self.logger.log(
                         'info',
                         self.name,
                         'rebooting',
@@ -190,7 +198,7 @@ class Device:
             timer_elapsed = timer_current - timer_start
             remaining = self.conf.reboot_timeout - timer_elapsed
             if remaining <= 0:
-                logger.log(
+                self.logger.log(
                     'warning',
                     self.name,
                     'timed out waiting for device after reboot',
@@ -207,7 +215,7 @@ class Device:
         print('connection works again')
         return True
 
-    def refresh_update_info(self, logger: Logger) -> None:
+    def refresh_update_info(self) -> None:
         """
         Connects to the device using ssh_call,
         sets the desired online update channel
@@ -220,14 +228,12 @@ class Device:
         self.version_info_str (str - printable version summary)\n
         If needed, sets back the original channel.
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         # set desired channel
         set_back_channel = False
         original_channel = self._get_channel()
         if original_channel != self.online_update_channel:
-            self._set_channel(logger, self.online_update_channel)
+            self._set_channel(self.online_update_channel)
             set_back_channel = True
         output = self.ssh_call('system package update check-for-updates')
         for line in output:
@@ -245,10 +251,10 @@ class Device:
                 if 'New version is available' in line:
                     self.update_available = True
                     if set_back_channel:
-                        self._set_channel(logger, original_channel)
+                        self._set_channel(original_channel)
                     return
                 if 'Downloaded, please reboot' in line:
-                    logger.log(
+                    self.logger.log(
                         'warning',
                         self.name,
                         'update already downloaded. reboot manually',
@@ -256,7 +262,7 @@ class Device:
                     )
         self.update_available = False
         if set_back_channel:
-            self._set_channel(logger, original_channel)
+            self._set_channel(original_channel)
 
     def simple_ssh_test(self) -> bool:
         """
@@ -290,11 +296,11 @@ class Device:
         Executes a command on the device using ssh - self.client.
         Returns the output as a list of lines (strings).
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = []
         try:
+            if not self.client:
+                raise
             stdin, stdout, stderr = self.client.exec_command(remote_cmd)
             for line in stdout.readlines():
                 output.append(line.strip('\n'))
@@ -407,15 +413,13 @@ class Device:
             ssh.close()
             return True
 
-    def update(self, logger: Logger) -> None:
+    def update(self) -> None:
         """Wrapper method to trigger both online and manual updates."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
 
         # online update from Internet and reboot
         if self.update_type == 'online':
-            logger.log(
+            self.logger.log(
                 severity='info',
                 device=self.name,
                 msg='online update',
@@ -427,7 +431,7 @@ class Device:
                     'setting desired online update channel' +
                     f' {self.online_update_channel}',
                 )
-                logger.log(
+                self.logger.log(
                     'info',
                     self.name,
                     'setting desired online update channel' +
@@ -435,28 +439,28 @@ class Device:
                     stdout=True,
                 )
                 # set channel
-                self._set_channel(logger, self.online_update_channel)
+                self._set_channel(self.online_update_channel)
                 time.sleep(1)
             # check update
-            self.refresh_update_info(logger=logger)
-            self._online_update(logger=logger)
+            self.refresh_update_info()
+            self._online_update()
 
         # Manual update - will upload packages to device and reboot it
         if self.update_type == 'manual':
-            logger.log(
+            self.logger.log(
                 severity='info',
                 device=self.name,
                 msg='manual update',
                 stdout=True,
             )
-            installed = self.get_installed_packages(logger=logger)
-            logger.log(
+            installed = self.get_installed_packages()
+            self.logger.log(
                 severity='info',
                 device=self.name,
                 msg=f'installed packages {installed}',
                 stdout=True,
             )
-            self._manual_update(logger=logger)
+            self._manual_update()
 
     def version_is_lower(self, ver_a: str, ver_b: str) -> bool:
         """
@@ -516,9 +520,7 @@ class Device:
 
     def _delete_file(self, filename: str) -> None:
         """Delete file on the device using ssh_call."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         _ = self.ssh_call(f'file remove {filename}')
 
     def _downgrade(self) -> None:
@@ -526,9 +528,7 @@ class Device:
         Reboot the device using the system "package downgrade"
         command over ssh_call.
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         _ = self.ssh_call('system package downgrade\ny')
 
     def _download_update(self) -> bool:
@@ -537,9 +537,7 @@ class Device:
         and check the result. Returns True when the message is
         "Downloaded, please reboot".
         """
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = self.ssh_call('system package update download')
         for line in output:
             if 'status:' in line:
@@ -547,51 +545,51 @@ class Device:
                     return True
         return False
 
-    def _online_update(self, logger: Logger) -> None:
+    def _online_update(self) -> None:
         """
         Perform online update or prints 'update not available'.\n
         First downloads the package using self._download_update().
         Then reboots using self.reboot_and_wait().
         """
         if self.update_available:
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 self.version_info_str,
                 stdout=True,
             )
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 'downloading update',
                 stdout=True,
             )
             if self._download_update():
-                logger.log(
+                self.logger.log(
                     'info',
                     self.name,
                     'download successful',
                     stdout=True,
                 )
-                if not self.reboot_and_wait(logger):
+                if not self.reboot_and_wait():
                     return
                 self.ssh_connect()
-                self.refresh_update_info(logger=logger)
-                logger.log(
+                self.refresh_update_info()
+                self.logger.log(
                     'info',
                     self.name,
                     self.version_info_str,
                     stdout=True,
                 )
             else:
-                logger.log(
+                self.logger.log(
                     'error',
                     self.name,
                     'download not successful',
                     stdout=True,
                 )
         else:
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 'update not available',
@@ -600,27 +598,23 @@ class Device:
 
     def _get_identity(self) -> str:
         """Get the device identity using ssh_call."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = self.ssh_call('system identity print')
         return output[0].split()[1]
 
     def _get_channel(self) -> str:
         """Get the active channel from the device using ssh_call."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = self.ssh_call('system package update print')
         for line in output:
             if 'channel' in line:
                 return line.split()[1]
         return ''
 
-    def _manual_update(self, logger: Logger) -> None:
+    def _manual_update(self) -> None:
         """Perform manual update using packages from the local system."""
         if len(self.packages) == 0:
-            logger.log(
+            self.logger.log(
                 'error',
                 self.name,
                 'manual update selected but no packages provided',
@@ -632,7 +626,7 @@ class Device:
             assert isinstance(package, str)
             package_path = Path(package)
             if not package_path.is_file():
-                logger.log(
+                self.logger.log(
                     'error',
                     self.name,
                     f'{package_path} does not exist',
@@ -646,33 +640,33 @@ class Device:
             package_version = package_path.name.split('-')[1]
             package_name = package_path.name.split('-')[0]
             if not do_downgrade:
-                for p in self.get_installed_packages(logger):
+                for p in self.get_installed_packages():
                     if p.split()[0] == package_name:
                         if self.version_is_lower(
                             package_version,
                             p.split()[1],
                         ):
                             do_downgrade = True
-            logger.log(
+            self.logger.log(
                 'info',
                 self.name,
                 f'uploading {package_path} to device',
                 stdout=True,
             )
             # upload the package to the device
-            if not self._upload_package(package_path, logger):
-                logger.log(
+            if not self._upload_package(package_path):
+                self.logger.log(
                     'error',
                     self.name,
                     f'failed to upload {package_path} to device',
                     stdout=True,
                 )
                 return
-        if not self.reboot_and_wait(logger, downgrade=do_downgrade):
+        if not self.reboot_and_wait(downgrade=do_downgrade):
             return
         self.ssh_connect()
-        self.refresh_update_info(logger=logger)
-        logger.log(
+        self.refresh_update_info()
+        self.logger.log(
             'info',
             self.name,
             self.version_info_str,
@@ -681,36 +675,32 @@ class Device:
 
     def _reboot(self) -> None:
         """Execute system reboot using ssh_call."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         _ = self.ssh_call('system reboot\ny')
 
-    def _set_channel(self, logger: Logger, channel: str) -> None:
+    def _set_channel(self, channel: str) -> None:
         """Set channel on the device using ssh_call."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         output = self.ssh_call(f'system package update set channel={channel}')
         if 'syntax error' in output:
-            logger.log(
+            self.logger.log(
                 'error',
                 self.name,
                 f'syntax error when setting channel {channel}',
                 stdout=True,
             )
 
-    def _upload_package(self, package_path: Path, logger: Logger) -> bool:
+    def _upload_package(self, package_path: Path) -> bool:
         """Take a path to a file, upload the file to the device using scp."""
-        if not self.client:
-            print('SSH not connected')
-            raise SystemExit(1)
+        self._ssh_check()
         try:
+            if not self.client:
+                raise
             with SCPClient(self.client.get_transport()) as scp:
                 # upload to / (RAM), use /flash to upload to persistent memory
                 scp.put(package_path, '/')
         except Exception as e:
-            logger.log(
+            self.logger.log(
                 'error',
                 self.name,
                 f'{e}',
