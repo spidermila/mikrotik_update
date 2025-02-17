@@ -5,14 +5,13 @@ import os
 from collections.abc import Sequence
 
 from mu.configmanager import ConfigManager
-from mu.logger import Logger
 
 try:
     VERSION_STR = importlib.metadata.version('mu')
 except importlib.metadata.PackageNotFoundError:
-    config = configparser.ConfigParser()
-    config.read(os.path.join(os.path.dirname(__file__), '..', 'setup.cfg'))
-    VERSION_STR = config['metadata']['version']
+    _config = configparser.ConfigParser()
+    _config.read(os.path.join(os.path.dirname(__file__), '..', 'setup.cfg'))
+    VERSION_STR = _config['metadata']['version']
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -73,8 +72,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cm = ConfigManager(configuration_file)
     if not cm.check_config_file():
         return 1
-    config, devices = cm.load_config()
-    logger = Logger(config.log_dir)
+    devices, logger = cm.load_config()
     if args.dry_run:
         logger.log('info', 'script', '=======DRYRUN started=======')
     else:
@@ -97,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             d.ssh_connect()
             if args.dry_run:
                 if d.update_type == 'manual':
-                    installed = d.get_installed_packages(logger)
+                    installed = d.get_installed_packages()
                     logger.log(
                         'info',
                         d.name,
@@ -106,7 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         stdout=True,
                     )
                 else:
-                    d.refresh_update_info(logger=logger)
+                    d.refresh_update_info()
                     logger.log(
                         'info',
                         d.name,
@@ -115,9 +113,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
             else:
                 if not args.update_only:
-                    d.backup(logger=logger)
+                    d.backup()
                 if not args.backup_only:
-                    d.update(logger=logger)
+                    d.update()
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")

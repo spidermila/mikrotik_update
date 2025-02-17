@@ -4,13 +4,14 @@ import yaml
 
 from mu.config import Config
 from mu.device import Device
+from mu.logger import Logger
 
 
 class ConfigManager:
     def __init__(self, filename: str) -> None:
         self.filename = filename
 
-    def load_config(self) -> tuple[Config, List[Device]]:
+    def load_config(self) -> tuple[List[Device], Logger]:
         devices: List[Device] = []
         with open(self.filename) as stream:
             try:
@@ -32,7 +33,7 @@ class ConfigManager:
         cfg.delete_backup_after_download = gl.get(
             'delete_backup_after_download',
         )
-
+        logger = Logger(cfg.log_dir)
         # renamed online_upgrade_channel to online_update_channel in 0.2.0
         if gl.get('online_upgrade_channel'):
             print(
@@ -96,11 +97,12 @@ class ConfigManager:
                 port=port,
                 username=username,
                 update_type=update_type,
+                logger=logger,
                 packages=packages,
             )
             new_device.online_update_channel = online_update_channel
             devices.append(new_device)
-        return (cfg, devices)
+        return (devices, logger)
 
     def check_config_file(self) -> bool:
         mandatory_global_options = ['backup_dir', 'private_key_file']
