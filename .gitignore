@@ -1,4 +1,9 @@
 /packages
+t.py
+
+# configuration files
+*.yaml
+!sample.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
