@@ -96,13 +96,16 @@ devices: # your fleet of Mikrotik devices
             - /home/test_user/mikrotik_update/packages/routeros-7.14.1-mipsbe.npk
 ```
 
-## Screen wrapper
-I am running the `mu` script on my server to which I am connected via a pair of Mikrotik devices.
-I got annoyed when I got disconnected from the ssh session while the `mu` script was running.
-So, I have created this simple wrapper which runs the `mu` for me in `screen`. Now I can get disconnected,
+## mu_screen - The Screen Wrapper
+The story:
+
+I am running the `mu` script on my Linux server to which I am connected via a pair of Mikrotik devices.
+I got annoyed when I got disconnected from the ssh session when the `mu` script restarted those Mikrotiks.
+(as expected when running an update)
+So, I have created this simple wrapper which runs the `mu` in `screen`. Now I can get disconnected,
 the updates keep running, and I can return to them when the connection is restored.
 
-All arguments of the `mu_screen` are passed to `mu`.
+All arguments of the `mu_screen` are passed to `mu`, so use it just as you would use the 'mu' script.
 ```bash
 mu_screen --dry-run sample.yaml
 ```
