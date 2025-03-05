@@ -30,7 +30,6 @@ Once the package is installed, run it:
 mu sample.yaml
 ```
 
-
 ## How to use the python script as a module
 I recommend to use virtualenv or venv and install the prerequisites there.
 The script shall be used as a python module with the `-m` option.
@@ -95,4 +94,15 @@ devices: # your fleet of Mikrotik devices
         packages:
             - /home/test_user/mikrotik_update/packages/wireless-7.14.1-mipsbe.npk
             - /home/test_user/mikrotik_update/packages/routeros-7.14.1-mipsbe.npk
+```
+
+## Screen wrapper
+I am running the `mu` script on my server to which I am connected via a pair of Mikrotik devices.
+I got annoyed when I got disconnected from the ssh session while the `mu` script was running.
+So, I have created this simple wrapper which runs the `mu` for me in `screen`. Now I can get disconnected,
+the updates keep running, and I can return to them when the connection is restored.
+
+All arguments of the `mu_screen` are passed to `mu`.
+```bash
+mu_screen --dry-run sample.yaml
 ```
