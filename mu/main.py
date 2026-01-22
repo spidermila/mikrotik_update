@@ -112,10 +112,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                         stdout=True,
                     )
             else:
-                if not args.update_only:
+                if args.backup_only:
                     d.backup()
-                if not args.backup_only:
-                    d.update()
+                else:
+                    if d.get_update_available():
+                        if args.update_only:
+                            d.update()
+                        else:
+                            d.backup()
+                            d.update()
+                    else:
+                        logger.log(
+                            'info',
+                            d.name,
+                            'No updates available.',
+                            stdout=True,
+                        )
+
             d.ssh_close()
         else:
             print(f"Can't connect to {d.name}")
