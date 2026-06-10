@@ -15,6 +15,7 @@ class Config:
         self.port: int | None = None
         self.log_dir: str = ''
         self.delete_backup_after_download = False
+        self.update_firmware = False
         self.update_type = 'online'
         self.online_update_channel = 'stable'
         self.reboot_timeout = 240

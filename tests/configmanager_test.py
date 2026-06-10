@@ -491,3 +491,71 @@ def test_check_config_file_correct(capsys):
         # print(f'{result=}')
         # captured = capsys.readouterr()
         assert result
+
+
+def _make_mock_data(extra_global=None, extra_device=None):
+    data = {
+        'global': {
+            'backup_dir': '/tmp/backup',
+            'private_key_file': '',
+            'username': 'user',
+            'log_dir': '/tmp/log',
+        },
+        'devices': [
+            {
+                'name': 'device1',
+                'address': '192.168.1.1',
+            },
+        ],
+    }
+    if extra_global:
+        data['global'].update(extra_global)
+    if extra_device:
+        data['devices'][0].update(extra_device)
+    return data
+
+
+def test_load_config_update_firmware_default():
+    mock_data = _make_mock_data()
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            with patch('mu.configmanager.Logger'):
+                cm = ConfigManager('dummy')
+                devices, _ = cm.load_config()
+    assert devices[0].update_firmware is False
+
+
+def test_load_config_update_firmware_global_true():
+    mock_data = _make_mock_data(extra_global={'update_firmware': True})
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            with patch('mu.configmanager.Logger'):
+                cm = ConfigManager('dummy')
+                devices, _ = cm.load_config()
+    assert devices[0].update_firmware is True
+
+
+def test_load_config_update_firmware_device_overrides_global():
+    mock_data = _make_mock_data(
+        extra_global={'update_firmware': True},
+        extra_device={'update_firmware': False},
+    )
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            with patch('mu.configmanager.Logger'):
+                cm = ConfigManager('dummy')
+                devices, _ = cm.load_config()
+    assert devices[0].update_firmware is False
+
+
+def test_load_config_update_firmware_device_true_global_false():
+    mock_data = _make_mock_data(
+        extra_global={'update_firmware': False},
+        extra_device={'update_firmware': True},
+    )
+    with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
+        with patch('yaml.safe_load', return_value=mock_data):
+            with patch('mu.configmanager.Logger'):
+                cm = ConfigManager('dummy')
+                devices, _ = cm.load_config()
+    assert devices[0].update_firmware is True
