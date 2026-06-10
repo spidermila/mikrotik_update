@@ -48,6 +48,7 @@ class ConfigManager:
         else:
             cfg.online_update_channel = gl.get('online_update_channel')
         cfg.update_type = gl.get('update_type')
+        cfg.update_firmware = gl.get('update_firmware', False)
 
         devs = data['devices']
         for dev in devs:
@@ -83,6 +84,11 @@ class ConfigManager:
                 update_type = cfg.update_type
             else:
                 update_type = 'online'
+            # Use update_firmware from device, global or False
+            if 'update_firmware' in dev:
+                update_firmware = dev['update_firmware']
+            else:
+                update_firmware = cfg.update_firmware
             # load packages if manual update type
             if update_type == 'manual':
                 packages = dev['packages']
@@ -101,6 +107,7 @@ class ConfigManager:
                 packages=packages,
             )
             new_device.online_update_channel = online_update_channel
+            new_device.update_firmware = update_firmware
             devices.append(new_device)
         return (devices, logger)
 

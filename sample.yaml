@@ -9,6 +9,7 @@ global: # global settings
     delete_backup_after_download: False # delete the backup file on the Mikrotik device once it's downloaded to backup_dir
     online_update_channel: stable # [stable, testing, development, long term]
     reboot_timeout: 200 # seconds, 240 is default
+    update_firmware: False # update routerboard firmware after RouterOS update if needed
 devices: # your fleet of Mikrotik devices
     -   name: main_router # mandatory, mainly for logging
         address: 192.168.1.1 # mandatory

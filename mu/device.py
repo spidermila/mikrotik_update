@@ -41,6 +41,7 @@ class Device:
         self.logger = logger
         self.packages = packages
         self.online_update_channel = 'stable'
+        self.update_firmware = False
         self.client: paramiko.SSHClient | None = None
         self.identity = ''
         self.public_key_file: str | None = None
@@ -49,6 +50,12 @@ class Device:
         self.latest_version = 'unknown'
         self.version_info_str = f'installed: {self.installed_version}, ' +\
                                 f'available: {self.latest_version}'
+        self.current_firmware = 'unknown'
+        self.upgrade_firmware = 'unknown'
+        self.firmware_info_str = (
+            f'current firmware: {self.current_firmware}, '
+            f'upgrade firmware: {self.upgrade_firmware}'
+        )
 
     def _ssh_check(self) -> None:
         if not self.client:
@@ -165,6 +172,88 @@ class Device:
         self._ssh_check()
         self.refresh_update_info()
         return self.update_available
+
+    def refresh_firmware_info(self) -> None:
+        """
+        Fetch routerboard firmware versions and update firmware_info_str,
+        current_firmware, and upgrade_firmware properties.
+        """
+        self._ssh_check()
+        output = self.ssh_call('system routerboard print')
+        for line in output:
+            if 'current-firmware' in line:
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    self.current_firmware = parts[1].strip()
+            elif 'upgrade-firmware' in line:
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    self.upgrade_firmware = parts[1].strip()
+        self.firmware_info_str = (
+            f'current firmware: {self.current_firmware}, '
+            f'upgrade firmware: {self.upgrade_firmware}'
+        )
+
+    def get_firmware_update_available(self) -> bool:
+        """Returns True if a routerboard firmware upgrade is available."""
+        self._ssh_check()
+        self.refresh_firmware_info()
+        return self.current_firmware != self.upgrade_firmware
+
+    def firmware_update(self) -> bool:
+        """
+        Check if a routerboard firmware upgrade is available and perform it.
+        Reboots the device and reconnects if an upgrade is applied.
+        Returns True on success or when already up to date.
+        """
+        self._ssh_check()
+        self.refresh_firmware_info()
+        if self.current_firmware == self.upgrade_firmware:
+            self.logger.log(
+                'info',
+                self.name,
+                f'routerboard firmware up to date: {self.current_firmware}',
+                stdout=True,
+            )
+            return True
+        self.logger.log(
+            'info',
+            self.name,
+            f'routerboard firmware upgrade available: '
+            f'{self.current_firmware} -> {self.upgrade_firmware}',
+            stdout=True,
+        )
+        self._routerboard_upgrade()
+        if not self.reboot_and_wait():
+            return False
+        try:
+            self.ssh_connect()
+        except Exception:
+            self.logger.log(
+                'error',
+                self.name,
+                'failed to reconnect after firmware reboot',
+                stdout=True,
+            )
+            return False
+        self.refresh_firmware_info()
+        if self.current_firmware != self.upgrade_firmware:
+            self.logger.log(
+                'error',
+                self.name,
+                f'firmware upgrade may have failed: '
+                f'current={self.current_firmware}, '
+                f'upgrade={self.upgrade_firmware}',
+                stdout=True,
+            )
+            return False
+        self.logger.log(
+            'info',
+            self.name,
+            f'routerboard firmware updated: {self.current_firmware}',
+            stdout=True,
+        )
+        return True
 
     def reboot_and_wait(self, downgrade=False) -> bool:
         """
@@ -677,6 +766,11 @@ class Device:
         """Execute system reboot using ssh_call."""
         self._ssh_check()
         _ = self.ssh_call('system reboot\ny')
+
+    def _routerboard_upgrade(self) -> None:
+        """Schedule routerboard firmware upgrade for next boot."""
+        self._ssh_check()
+        _ = self.ssh_call('system routerboard upgrade')
 
     def _set_channel(self, channel: str) -> None:
         """Set channel on the device using ssh_call."""

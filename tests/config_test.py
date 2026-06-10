@@ -19,6 +19,7 @@ def test_config_init():
         assert config.port is None
         assert config.log_dir == ''
         assert config.delete_backup_after_download is False
+        assert config.update_firmware is False
         assert config.update_type == 'online'
         assert config.online_update_channel == 'stable'
         assert config.reboot_timeout == 240
@@ -36,6 +37,7 @@ def test_config_without_private_key():
     assert config.port is None
     assert config.log_dir == ''
     assert config.delete_backup_after_download is False
+    assert config.update_firmware is False
     assert config.update_type == 'online'
     assert config.online_update_channel == 'stable'
     assert config.reboot_timeout == 240

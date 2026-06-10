@@ -111,6 +111,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                         d.version_info_str,
                         stdout=True,
                     )
+                if d.update_firmware:
+                    d.refresh_firmware_info()
+                    logger.log(
+                        'info',
+                        d.name,
+                        d.firmware_info_str,
+                        stdout=True,
+                    )
             else:
                 if args.backup_only:
                     d.backup()
@@ -128,6 +136,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                             'No updates available.',
                             stdout=True,
                         )
+                    if d.update_firmware:
+                        if not d.firmware_update():
+                            logger.log(
+                                'error',
+                                d.name,
+                                'firmware update failed',
+                                stdout=True,
+                            )
 
             d.ssh_close()
         else:
