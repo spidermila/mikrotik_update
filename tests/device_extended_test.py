@@ -1,4 +1,5 @@
 import pathlib
+from unittest.mock import call
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -10,19 +11,11 @@ from mu.device import Device
 from mu.logger import Logger
 
 
-@pytest.fixture
-def mock_conf():
-    conf = MagicMock(spec=Config)
-    conf.key = None
-    conf.reboot_timeout = 10
-    conf.backup_dir = pathlib.Path('/tmp/backups')
-    conf.delete_backup_after_download = False
-    return conf
+# mock_conf and disconnected_dev fixtures live in conftest.py
 
 
 @pytest.fixture
 def dev(mock_conf):
-    mock_logger = MagicMock(spec=Logger)
     d = Device(
         conf=mock_conf,
         name='router',
@@ -30,7 +23,7 @@ def dev(mock_conf):
         port=22,
         username='admin',
         update_type='online',
-        logger=mock_logger,
+        logger=MagicMock(spec=Logger),
     )
     d.client = MagicMock()
     return d
@@ -38,20 +31,9 @@ def dev(mock_conf):
 
 # ─── _ssh_check ──────────────────────────────────────────────────────────────
 
-def test_ssh_check_no_client_raises(mock_conf):
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
-    d.client = None
+def test_ssh_check_no_client_raises(disconnected_dev):
     with pytest.raises(SystemExit):
-        d._ssh_check()
+        disconnected_dev._ssh_check()
 
 
 # ─── ssh_call ────────────────────────────────────────────────────────────────
@@ -81,76 +63,37 @@ def test_ssh_close_closes_client(dev):
     assert dev.client is None
 
 
-def test_ssh_close_no_client(mock_conf):
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
-    d.client = None
-    d.ssh_close()  # should not raise
+def test_ssh_close_no_client(disconnected_dev):
+    disconnected_dev.ssh_close()  # should not raise
 
 
 # ─── ssh_connect ─────────────────────────────────────────────────────────────
 
-def test_ssh_connect_with_key(mock_conf):
-    mock_conf.key = MagicMock()
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_connect_with_key(disconnected_dev):
+    disconnected_dev.conf.key = MagicMock()
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        with patch.object(d, '_get_identity', return_value='myrouter'):
-            d.ssh_connect()
-    assert d.identity == 'myrouter'
+        with patch.object(
+            disconnected_dev, '_get_identity', return_value='myrouter',
+        ):
+            disconnected_dev.ssh_connect()
+    assert disconnected_dev.identity == 'myrouter'
     mock_client.connect.assert_called_once()
 
 
-def test_ssh_connect_without_key(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_connect_without_key(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        with patch.object(d, '_get_identity', return_value='myrouter'):
-            d.ssh_connect()
+        with patch.object(
+            disconnected_dev, '_get_identity', return_value='myrouter',
+        ):
+            disconnected_dev.ssh_connect()
     mock_client.connect.assert_called_once()
 
 
-def test_ssh_connect_auth_exception(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_connect_auth_exception(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
@@ -158,64 +101,32 @@ def test_ssh_connect_auth_exception(mock_conf):
             paramiko.AuthenticationException('fail')
         )
         with pytest.raises(paramiko.AuthenticationException):
-            d.ssh_connect()
+            disconnected_dev.ssh_connect()
 
 
 # ─── ssh_test ────────────────────────────────────────────────────────────────
 
-def test_ssh_test_success_with_key(mock_conf):
-    mock_conf.key = MagicMock()
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_test_success_with_key(disconnected_dev):
+    disconnected_dev.conf.key = MagicMock()
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        result = d.ssh_test()
+        result = disconnected_dev.ssh_test()
     assert result is True
     mock_client.close.assert_called_once()
 
 
-def test_ssh_test_success_without_key(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_test_success_without_key(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        result = d.ssh_test()
+        result = disconnected_dev.ssh_test()
     assert result is True
 
 
-def test_ssh_test_auth_exception_user_says_n(mock_conf):
-    mock_conf.key = None
-    mock_conf.public_key_file = None
-    mock_conf.public_key_owner = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_test_auth_exception_user_says_n(disconnected_dev):
+    disconnected_dev.conf.public_key_file = None
+    disconnected_dev.conf.public_key_owner = None
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
@@ -224,23 +135,12 @@ def test_ssh_test_auth_exception_user_says_n(mock_conf):
         )
         with patch('builtins.input', return_value='n'):
             with pytest.raises(SystemExit):
-                d.ssh_test()
+                disconnected_dev.ssh_test()
 
 
-def test_ssh_test_auth_exception_user_says_y(mock_conf):
-    mock_conf.key = None
-    mock_conf.public_key_file = 'mykey.pub'
-    mock_conf.public_key_owner = 'owner'
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_test_auth_exception_user_says_y(disconnected_dev):
+    disconnected_dev.conf.public_key_file = 'mykey.pub'
+    disconnected_dev.conf.public_key_owner = 'owner'
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
@@ -252,26 +152,15 @@ def test_ssh_test_auth_exception_user_says_y(mock_conf):
                 mock_ur = MagicMock()
                 mock_ur.run.return_value = True
                 mock_ur_class.return_value = mock_ur
-                result = d.ssh_test()
+                result = disconnected_dev.ssh_test()
     assert result is True
 
 
-def test_ssh_test_auth_exception_device_has_public_key_file(mock_conf):
-    mock_conf.key = None
-    mock_conf.public_key_file = 'global_key.pub'
-    mock_conf.public_key_owner = 'owner'
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
-    d.public_key_file = 'device_key.pub'
-    d.public_key_owner = 'device_owner'
+def test_ssh_test_auth_exception_device_has_public_key_file(disconnected_dev):
+    disconnected_dev.conf.public_key_file = 'global_key.pub'
+    disconnected_dev.conf.public_key_owner = 'owner'
+    disconnected_dev.public_key_file = 'device_key.pub'
+    disconnected_dev.public_key_owner = 'device_owner'
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
@@ -283,87 +172,44 @@ def test_ssh_test_auth_exception_device_has_public_key_file(mock_conf):
                 mock_ur = MagicMock()
                 mock_ur.run.return_value = True
                 mock_ur_class.return_value = mock_ur
-                result = d.ssh_test()
+                result = disconnected_dev.ssh_test()
     assert result is True
 
 
-def test_ssh_test_os_error(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_ssh_test_os_error(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
         mock_client.connect.side_effect = OSError('unreachable')
-        result = d.ssh_test()
+        result = disconnected_dev.ssh_test()
     assert result is False
 
 
 # ─── simple_ssh_test ─────────────────────────────────────────────────────────
 
-def test_simple_ssh_test_success_with_key(mock_conf):
-    mock_conf.key = MagicMock()
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_simple_ssh_test_success_with_key(disconnected_dev):
+    disconnected_dev.conf.key = MagicMock()
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        result = d.simple_ssh_test()
+        result = disconnected_dev.simple_ssh_test()
     assert result is True
 
 
-def test_simple_ssh_test_success_without_key(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_simple_ssh_test_success_without_key(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
-        result = d.simple_ssh_test()
+        result = disconnected_dev.simple_ssh_test()
     assert result is True
 
 
-def test_simple_ssh_test_failure(mock_conf):
-    mock_conf.key = None
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_simple_ssh_test_failure(disconnected_dev):
     with patch('paramiko.SSHClient') as mock_ssh_class:
         mock_client = MagicMock()
         mock_ssh_class.return_value = mock_client
         mock_client.connect.side_effect = Exception('fail')
-        result = d.simple_ssh_test()
+        result = disconnected_dev.simple_ssh_test()
     assert result is False
 
 
@@ -524,9 +370,7 @@ def test_refresh_update_info_channel_switch(dev):
             with patch.object(dev, '_set_channel') as mock_set:
                 dev.refresh_update_info()
     assert dev.update_available is True
-    # When update is available and channel was different:
-    # set channel to 'testing', then set back to 'stable' before returning
-    assert mock_set.call_count == 2
+    assert mock_set.call_args_list == [call('testing'), call('stable')]
 
 
 def test_refresh_update_info_channel_switch_no_update(dev):
@@ -541,8 +385,7 @@ def test_refresh_update_info_channel_switch_no_update(dev):
             with patch.object(dev, '_set_channel') as mock_set:
                 dev.refresh_update_info()
     assert dev.update_available is False
-    # Should have set and reset channel
-    assert mock_set.call_count == 2
+    assert mock_set.call_args_list == [call('testing'), call('stable')]
 
 
 # ─── reboot_and_wait ─────────────────────────────────────────────────────────
@@ -624,9 +467,11 @@ def test_online_update_download_success(dev):
     dev.version_info_str = 'installed: 7.14, available: 7.15'
     with patch.object(dev, '_download_update', return_value=True):
         with patch.object(dev, 'reboot_and_wait', return_value=True):
-            with patch.object(dev, 'ssh_connect'):
-                with patch.object(dev, 'refresh_update_info'):
+            with patch.object(dev, 'ssh_connect') as mock_connect:
+                with patch.object(dev, 'refresh_update_info') as mock_refresh:
                     dev._online_update()
+    mock_connect.assert_called_once()
+    mock_refresh.assert_called_once()
 
 
 def test_online_update_download_failure(dev):
@@ -647,7 +492,9 @@ def test_online_update_reboot_fails(dev):
     dev.version_info_str = 'installed: 7.14, available: 7.15'
     with patch.object(dev, '_download_update', return_value=True):
         with patch.object(dev, 'reboot_and_wait', return_value=False):
-            dev._online_update()
+            with patch.object(dev, 'ssh_connect') as mock_connect:
+                dev._online_update()
+    mock_connect.assert_not_called()
 
 
 # ─── _download_update ────────────────────────────────────────────────────────
@@ -680,10 +527,15 @@ def test_manual_update_no_packages(dev):
 
 
 def test_manual_update_package_not_exist(dev, tmp_path):
-    dev.packages = [str(tmp_path / 'routeros-7.15.npk')]
+    pkg = tmp_path / 'routeros-7.15.npk'
+    dev.packages = [str(pkg)]
     dev._manual_update()
-    # Should log error about file not existing
-    dev.logger.log.assert_called()
+    dev.logger.log.assert_called_with(
+        'error',
+        'router',
+        f'{pkg} does not exist',
+        stdout=True,
+    )
 
 
 def test_manual_update_success(dev, tmp_path):
@@ -694,10 +546,13 @@ def test_manual_update_success(dev, tmp_path):
     with patch.object(dev, 'get_installed_packages', return_value=installed):
         with patch.object(dev, '_upload_package', return_value=True):
             with patch.object(dev, 'reboot_and_wait', return_value=True):
-                with patch.object(dev, 'ssh_connect'):
-                    with patch.object(dev, 'refresh_update_info'):
+                with patch.object(dev, 'ssh_connect') as mock_connect:
+                    with patch.object(
+                        dev, 'refresh_update_info',
+                    ) as mock_refresh:
                         dev._manual_update()
-    dev.logger.log.assert_called()
+    mock_connect.assert_called_once()
+    mock_refresh.assert_called_once()
 
 
 def test_manual_update_upload_fails(dev, tmp_path):
@@ -708,7 +563,12 @@ def test_manual_update_upload_fails(dev, tmp_path):
     with patch.object(dev, 'get_installed_packages', return_value=installed):
         with patch.object(dev, '_upload_package', return_value=False):
             dev._manual_update()
-    dev.logger.log.assert_called()
+    dev.logger.log.assert_called_with(
+        'error',
+        'router',
+        f'failed to upload {pkg} to device',
+        stdout=True,
+    )
 
 
 def test_manual_update_downgrade(dev, tmp_path):
@@ -724,7 +584,6 @@ def test_manual_update_downgrade(dev, tmp_path):
                 with patch.object(dev, 'ssh_connect'):
                     with patch.object(dev, 'refresh_update_info'):
                         dev._manual_update()
-    # Should call reboot_and_wait with downgrade=True
     mock_reboot.assert_called_once_with(downgrade=True)
 
 
@@ -736,7 +595,9 @@ def test_manual_update_reboot_fails(dev, tmp_path):
     with patch.object(dev, 'get_installed_packages', return_value=installed):
         with patch.object(dev, '_upload_package', return_value=True):
             with patch.object(dev, 'reboot_and_wait', return_value=False):
-                dev._manual_update()
+                with patch.object(dev, 'ssh_connect') as mock_connect:
+                    dev._manual_update()
+    mock_connect.assert_not_called()
 
 
 # ─── _get_identity ───────────────────────────────────────────────────────────
@@ -769,7 +630,6 @@ def test_set_channel_success(dev):
 
 
 def test_set_channel_syntax_error(dev):
-    # The check is 'syntax error' in output (list membership, not substring)
     with patch.object(dev, 'ssh_call', return_value=['syntax error']):
         dev._set_channel('bad-channel')
     dev.logger.log.assert_called()
@@ -850,13 +710,8 @@ def test_firmware_update_still_different_after_reboot(dev):
 
     def side_refresh():
         call_count['n'] += 1
-        if call_count['n'] == 1:
-            dev.current_firmware = '7.14'
-            dev.upgrade_firmware = '7.16'
-        else:
-            # After reboot, still different (upgrade failed)
-            dev.current_firmware = '7.14'
-            dev.upgrade_firmware = '7.16'
+        dev.current_firmware = '7.14'
+        dev.upgrade_firmware = '7.16'
 
     with patch.object(dev, 'refresh_firmware_info', side_effect=side_refresh):
         with patch.object(dev, '_routerboard_upgrade'):
@@ -868,119 +723,72 @@ def test_firmware_update_still_different_after_reboot(dev):
 
 # ─── version_is_lower ────────────────────────────────────────────────────────
 
-def test_version_is_lower_major(dev):
-    assert dev.version_is_lower('6.99', '7.0') is True
-    assert dev.version_is_lower('7.0', '6.99') is False
+@pytest.fixture(scope='module')
+def version_dev():
+    return Device(
+        conf=MagicMock(spec=Config),
+        name='r',
+        address='10.0.0.1',
+        port=22,
+        username='admin',
+        update_type='online',
+        logger=MagicMock(spec=Logger),
+    )
 
 
-def test_version_is_lower_stable(dev):
-    assert dev.version_is_lower('7.14', '7.15') is True
-    assert dev.version_is_lower('7.15', '7.14') is False
-    assert dev.version_is_lower('7.15', '7.15') is False
-
-
-def test_version_is_lower_beta(dev):
-    assert dev.version_is_lower('7.15beta9', '7.15') is True
-    assert dev.version_is_lower('7.15', '7.15beta9') is False
-
-
-def test_version_is_lower_alpha_vs_stable(dev):
-    # alpha < stable (release)
-    assert dev.version_is_lower('7.15alpha1', '7.15') is True
-    assert dev.version_is_lower('7.15', '7.15alpha1') is False
-
-
-def test_version_is_lower_beta_vs_stable(dev):
-    # beta < stable (release)
-    assert dev.version_is_lower('7.15beta1', '7.15') is True
-    assert dev.version_is_lower('7.15', '7.15beta1') is False
-
-
-def test_version_is_lower_same_beta(dev):
-    assert dev.version_is_lower('7.15beta1', '7.15beta2') is True
-    assert dev.version_is_lower('7.15beta2', '7.15beta1') is False
-
-
-def test_version_is_lower_equal(dev):
-    assert dev.version_is_lower('7.15', '7.15') is False
-
-
-def test_version_is_lower_third_segment(dev):
-    assert dev.version_is_lower('7.15.1', '7.15.2') is True
-    assert dev.version_is_lower('7.15.2', '7.15.1') is False
-    assert dev.version_is_lower('7.15.1', '7.15.1') is False
-
-
-def test_version_is_lower_rc_in_a(dev):
-    # 'rc1' has alpha chars but not 'alpha'/'beta' -> extra='0' branch
-    assert dev.version_is_lower('7.15rc1', '7.16') is True
-
-
-def test_version_is_lower_rc_in_b(dev):
-    # 'rc1' has alpha chars but not 'alpha'/'beta' -> extra='0' branch
-    assert dev.version_is_lower('7.14', '7.15rc1') is True
+@pytest.mark.parametrize(
+    'a,b,expected', [
+        ('6.99', '7.0', True),
+        ('7.0', '6.99', False),
+        ('7.14', '7.15', True),
+        ('7.15', '7.14', False),
+        ('7.15', '7.15', False),
+        ('7.15beta9', '7.15', True),
+        ('7.15', '7.15beta9', False),
+        ('7.15alpha1', '7.15', True),
+        ('7.15', '7.15alpha1', False),
+        ('7.15beta1', '7.15', True),
+        ('7.15', '7.15beta1', False),
+        ('7.15beta1', '7.15beta2', True),
+        ('7.15beta2', '7.15beta1', False),
+        ('7.15', '7.15', False),
+        ('7.15.1', '7.15.2', True),
+        ('7.15.2', '7.15.1', False),
+        ('7.15.1', '7.15.1', False),
+        ('7.15rc1', '7.16', True),
+        ('7.14', '7.15rc1', True),
+    ],
+)
+def test_version_is_lower(version_dev, a, b, expected):
+    assert version_dev.version_is_lower(a, b) is expected
 
 
 # ─── defensive client=None guard coverage ────────────────────────────────────
 
-def test_ssh_call_client_none_after_check(mock_conf):
-    """Cover line 392: raise when client is None despite _ssh_check pass."""
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
-    d.client = MagicMock()
-    with patch.object(d, '_ssh_check'):
-        d.client = None
+def test_ssh_call_client_none_after_check(disconnected_dev):
+    """Cover raise when client is None despite _ssh_check pass."""
+    with patch.object(disconnected_dev, '_ssh_check'):
         with pytest.raises(Exception):
-            d.ssh_call('cmd')
+            disconnected_dev.ssh_call('cmd')
 
 
-def test_upload_package_client_none_after_check(mock_conf, tmp_path):
-    """Cover line 792: raise when client is None despite _ssh_check pass."""
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
+def test_upload_package_client_none_after_check(disconnected_dev, tmp_path):
+    """Cover raise when client is None despite _ssh_check pass."""
     pkg = tmp_path / 'routeros-7.15.npk'
     pkg.write_bytes(b'fake')
-    d.client = MagicMock()
-    with patch.object(d, '_ssh_check'):
-        d.client = None
-        result = d._upload_package(pkg)
+    with patch.object(disconnected_dev, '_ssh_check'):
+        result = disconnected_dev._upload_package(pkg)
     assert result is False
 
 
-def test_backup_client_none_after_check(mock_conf):
-    """Cover line 112: raise when client is None inside backup try block."""
-    mock_logger = MagicMock(spec=Logger)
-    d = Device(
-        conf=mock_conf,
-        name='r',
-        address='10.0.0.1',
-        port=22,
-        username='admin',
-        update_type='online',
-        logger=mock_logger,
-    )
-    d.identity = 'myrouter'
-    d.client = MagicMock()
+def test_backup_client_none_after_check(disconnected_dev):
+    """Cover raise when client is None inside backup try block."""
+    disconnected_dev.identity = 'myrouter'
     backup_saved = ['Configuration backup saved\r']
-    with patch.object(d, '_ssh_check'):
-        with patch.object(d, 'ssh_call', return_value=backup_saved):
+    with patch.object(disconnected_dev, '_ssh_check'):
+        with patch.object(
+            disconnected_dev, 'ssh_call', return_value=backup_saved,
+        ):
             with patch.object(pathlib.Path, 'mkdir'):
-                d.client = None
-                result = d.backup()
+                result = disconnected_dev.backup()
     assert result is False
