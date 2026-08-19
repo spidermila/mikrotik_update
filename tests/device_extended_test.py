@@ -316,11 +316,19 @@ def test_export_config_write_failure(dev, tmp_path):
     dev.identity = 'myrouter'
     dev.conf.backup_dir = tmp_path
     with patch.object(dev, 'ssh_call', return_value=['line']):
-        with patch.object(
-            pathlib.Path, 'write_text', side_effect=OSError('disk full'),
-        ):
+        with patch('mu.device.os.open', side_effect=OSError('disk full')):
             result = dev.export_config()
     assert result is False
+    assert list(tmp_path.glob('*.rsc')) == []
+
+
+def test_export_config_empty_output(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    with patch.object(dev, 'ssh_call', return_value=[]):
+        result = dev.export_config()
+    assert result is False
+    assert list(tmp_path.glob('*.rsc')) == []
 
 
 # ─── exec_command ────────────────────────────────────────────────────────────

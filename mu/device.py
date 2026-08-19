@@ -1,3 +1,4 @@
+import os
 import re
 import time
 from datetime import datetime
@@ -169,11 +170,27 @@ class Device:
                 stdout=True,
             )
             return False
+        if not lines:
+            self.logger.log(
+                'error',
+                self.name,
+                'export produced no output',
+                stdout=True,
+            )
+            return False
         self.conf.backup_dir.mkdir(parents=True, exist_ok=True)
         export_path = self.conf.backup_dir / export_file_name
+        content = ('\n'.join(lines) + '\n').encode()
         try:
-            export_path.write_text('\n'.join(lines) + '\n')
-            export_path.chmod(0o600)
+            fd = os.open(
+                export_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                0o600,
+            )
+            try:
+                os.write(fd, content)
+            finally:
+                os.close(fd)
         except Exception as e:
             self.logger.log(
                 'error',
@@ -181,6 +198,10 @@ class Device:
                 f'failed writing export file: {e}',
                 stdout=True,
             )
+            try:
+                export_path.unlink()
+            except OSError:
+                pass
             return False
         self.logger.log(
             'info',

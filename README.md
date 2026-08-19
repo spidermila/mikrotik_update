@@ -6,7 +6,7 @@ The tool will first perform a backup of the device and download
 it to a local directory. Alongside the binary `.backup` file, a
 `.rsc` script produced by `/export show-sensitive` is also saved
 (same basename, same directory). The update is performed only if
-the backup and download are successful.
+the backup, download, and configuration export are successful.
 
 **Note:** the `.rsc` file contains plaintext secrets (PSKs, RADIUS
 secrets, SNMP communities, user password hashes, etc.). It is written
