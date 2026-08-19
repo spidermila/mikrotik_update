@@ -134,6 +134,60 @@ class Device:
                 stdout=True,
             )
             self._delete_file(self.backup_file_full_name)
+        export_ok = self.export_config()
+        return export_ok
+
+    def export_config(self) -> bool:
+        """
+        Run '/export show-sensitive' on the device and store the output
+        as '{identity}-{timestamp}.rsc' in self.conf.backup_dir. \n
+        Uses the same basename as the most recent backup when available,
+        otherwise generates a new timestamp. \n
+        File contains plaintext secrets; written with mode 0600.
+        """
+        self._ssh_check()
+        backup_name = getattr(self, 'backup_file_full_name', None)
+        if backup_name:
+            base = Path(backup_name).stem
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M')
+            base = f'{self.identity}-{timestamp}'
+        export_file_name = f'{base}.rsc'
+        self.export_file_full_name = export_file_name
+        self.logger.log(
+            'info',
+            self.name,
+            'running /export show-sensitive',
+        )
+        try:
+            lines = self.ssh_call('/export show-sensitive')
+        except Exception as e:
+            self.logger.log(
+                'error',
+                self.name,
+                f'export failed: {e}',
+                stdout=True,
+            )
+            return False
+        self.conf.backup_dir.mkdir(parents=True, exist_ok=True)
+        export_path = self.conf.backup_dir / export_file_name
+        try:
+            export_path.write_text('\n'.join(lines) + '\n')
+            export_path.chmod(0o600)
+        except Exception as e:
+            self.logger.log(
+                'error',
+                self.name,
+                f'failed writing export file: {e}',
+                stdout=True,
+            )
+            return False
+        self.logger.log(
+            'info',
+            self.name,
+            f'export saved to {export_path} ({len(lines)} lines)',
+            stdout=True,
+        )
         return True
 
     def exec_command(self, remote_cmd: str) -> None:
