@@ -1,3 +1,4 @@
+import os
 import re
 import time
 from datetime import datetime
@@ -69,9 +70,13 @@ class Device:
 
     def backup(self) -> bool:
         """
-        Perform backup to a file.
+        Perform backup to a file, download it, and export the
+        configuration via '/export show-sensitive'.
         File name format: "identity-yyyymmdd-hhmm.backup" \n
-        File name stored to self.backup_file_full_name variable.
+        File name stored to self.backup_file_full_name variable. \n
+        Returns True only when the backup, download and configuration
+        export all succeed. Callers must check this before running
+        an update.
         """
         # create backup
         self._ssh_check()
@@ -134,6 +139,79 @@ class Device:
                 stdout=True,
             )
             self._delete_file(self.backup_file_full_name)
+        return self.export_config()
+
+    def export_config(self) -> bool:
+        """
+        Run '/export show-sensitive' on the device and store the output
+        as '{identity}-{timestamp}.rsc' in self.conf.backup_dir. \n
+        Uses the same basename as the most recent backup when available,
+        otherwise generates a new timestamp. \n
+        File contains plaintext secrets; written with mode 0600.
+        """
+        self._ssh_check()
+        backup_name = getattr(self, 'backup_file_full_name', None)
+        if backup_name:
+            base = Path(backup_name).stem
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M')
+            base = f'{self.identity}-{timestamp}'
+        export_file_name = f'{base}.rsc'
+        self.export_file_full_name = export_file_name
+        self.logger.log(
+            'info',
+            self.name,
+            'running /export show-sensitive',
+        )
+        try:
+            lines = self.ssh_call('/export show-sensitive')
+        except Exception as e:
+            self.logger.log(
+                'error',
+                self.name,
+                f'export failed: {e}',
+                stdout=True,
+            )
+            return False
+        if not lines:
+            self.logger.log(
+                'error',
+                self.name,
+                'export produced no output',
+                stdout=True,
+            )
+            return False
+        self.conf.backup_dir.mkdir(parents=True, exist_ok=True)
+        export_path = self.conf.backup_dir / export_file_name
+        content = ('\n'.join(lines) + '\n').encode()
+        try:
+            fd = os.open(
+                export_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                0o600,
+            )
+            try:
+                os.write(fd, content)
+            finally:
+                os.close(fd)
+        except Exception as e:
+            self.logger.log(
+                'error',
+                self.name,
+                f'failed writing export file: {e}',
+                stdout=True,
+            )
+            try:
+                export_path.unlink()
+            except OSError:
+                pass
+            return False
+        self.logger.log(
+            'info',
+            self.name,
+            f'export saved to {export_path} ({len(lines)} lines)',
+            stdout=True,
+        )
         return True
 
     def exec_command(self, remote_cmd: str) -> None:

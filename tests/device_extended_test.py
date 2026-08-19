@@ -229,7 +229,8 @@ def test_backup_success(dev):
                 return_value=False,
             )
             with patch.object(pathlib.Path, 'mkdir'):
-                result = dev.backup()
+                with patch.object(dev, 'export_config', return_value=True):
+                    result = dev.backup()
     assert result is True
 
 
@@ -247,7 +248,8 @@ def test_backup_scp_exception(dev):
     with patch.object(dev, 'ssh_call', return_value=saved_output):
         with patch('mu.device.SCPClient', side_effect=Exception('scp fail')):
             with patch.object(pathlib.Path, 'mkdir'):
-                result = dev.backup()
+                with patch.object(dev, 'export_config', return_value=True):
+                    result = dev.backup()
     assert result is False
 
 
@@ -266,9 +268,67 @@ def test_backup_with_delete(dev):
             )
             with patch.object(pathlib.Path, 'mkdir'):
                 with patch.object(dev, '_delete_file') as mock_delete:
-                    result = dev.backup()
+                    with patch.object(
+                        dev, 'export_config', return_value=True,
+                    ):
+                        result = dev.backup()
     assert result is True
     mock_delete.assert_called_once()
+
+
+# ─── export_config ───────────────────────────────────────────────────────────
+
+def test_export_config_uses_backup_basename(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    dev.backup_file_full_name = 'myrouter-20240101-1200.backup'
+    export_lines = ['# comment', '/ip address', 'add address=1.2.3.4/24']
+    with patch.object(dev, 'ssh_call', return_value=export_lines):
+        result = dev.export_config()
+    assert result is True
+    out = tmp_path / 'myrouter-20240101-1200.rsc'
+    assert out.exists()
+    assert out.read_text() == '\n'.join(export_lines) + '\n'
+    assert (out.stat().st_mode & 0o777) == 0o600
+    assert dev.export_file_full_name == 'myrouter-20240101-1200.rsc'
+
+
+def test_export_config_without_backup_basename(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    with patch.object(dev, 'ssh_call', return_value=['line']):
+        result = dev.export_config()
+    assert result is True
+    written = list(tmp_path.glob('myrouter-*.rsc'))
+    assert len(written) == 1
+
+
+def test_export_config_ssh_failure(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    with patch.object(dev, 'ssh_call', side_effect=Exception('boom')):
+        result = dev.export_config()
+    assert result is False
+    assert list(tmp_path.glob('*.rsc')) == []
+
+
+def test_export_config_write_failure(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    with patch.object(dev, 'ssh_call', return_value=['line']):
+        with patch('mu.device.os.open', side_effect=OSError('disk full')):
+            result = dev.export_config()
+    assert result is False
+    assert list(tmp_path.glob('*.rsc')) == []
+
+
+def test_export_config_empty_output(dev, tmp_path):
+    dev.identity = 'myrouter'
+    dev.conf.backup_dir = tmp_path
+    with patch.object(dev, 'ssh_call', return_value=[]):
+        result = dev.export_config()
+    assert result is False
+    assert list(tmp_path.glob('*.rsc')) == []
 
 
 # ─── exec_command ────────────────────────────────────────────────────────────
@@ -790,5 +850,8 @@ def test_backup_client_none_after_check(disconnected_dev):
             disconnected_dev, 'ssh_call', return_value=backup_saved,
         ):
             with patch.object(pathlib.Path, 'mkdir'):
-                result = disconnected_dev.backup()
+                with patch.object(
+                    disconnected_dev, 'export_config', return_value=True,
+                ):
+                    result = disconnected_dev.backup()
     assert result is False
