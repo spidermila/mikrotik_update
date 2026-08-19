@@ -121,14 +121,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
             else:
                 if args.backup_only:
-                    d.backup()
+                    if not d.backup():
+                        logger.log(
+                            'error',
+                            d.name,
+                            'backup or export failed',
+                            stdout=True,
+                        )
                 else:
                     if d.get_update_available():
                         if args.update_only:
                             d.update()
-                        else:
-                            d.backup()
+                        elif d.backup():
                             d.update()
+                        else:
+                            logger.log(
+                                'error',
+                                d.name,
+                                'backup or export failed, '
+                                'skipping update',
+                                stdout=True,
+                            )
                     else:
                         logger.log(
                             'info',

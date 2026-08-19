@@ -70,9 +70,13 @@ class Device:
 
     def backup(self) -> bool:
         """
-        Perform backup to a file.
+        Perform backup to a file, download it, and export the
+        configuration via '/export show-sensitive'.
         File name format: "identity-yyyymmdd-hhmm.backup" \n
-        File name stored to self.backup_file_full_name variable.
+        File name stored to self.backup_file_full_name variable. \n
+        Returns True only when the backup, download and configuration
+        export all succeed. Callers must check this before running
+        an update.
         """
         # create backup
         self._ssh_check()
@@ -135,8 +139,7 @@ class Device:
                 stdout=True,
             )
             self._delete_file(self.backup_file_full_name)
-        export_ok = self.export_config()
-        return export_ok
+        return self.export_config()
 
     def export_config(self) -> bool:
         """
