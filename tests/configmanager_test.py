@@ -1,4 +1,3 @@
-from unittest.mock import MagicMock
 from unittest.mock import mock_open
 from unittest.mock import patch
 
@@ -6,13 +5,12 @@ import pytest
 import yaml
 
 from mu.configmanager import ConfigManager
-from mu.logger import Logger
-# from unittest.mock import MagicMock
 
 
-@pytest.fixture(scope='session', autouse=True)
-def logger():
-    yield MagicMock(spec=Logger)
+@pytest.fixture(autouse=True)
+def _patch_logger():
+    with patch('mu.configmanager.Logger'):
+        yield
 
 
 def test_config_manager_init():
@@ -60,7 +58,7 @@ def test_load_config_username_not_in_devices():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            cfg, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.username == 'global-user'
 
@@ -125,7 +123,7 @@ def test_load_config_prt_not_in_devices():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.port == 333
 
@@ -157,7 +155,7 @@ def test_load_config_no_port():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.port == 22
 
@@ -190,7 +188,7 @@ def test_load_config_no_online_update_channel_in_dev():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.online_update_channel == 'test_stable'
 
@@ -222,7 +220,7 @@ def test_load_config_no_online_update_channel():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.online_update_channel == 'stable'
 
@@ -255,7 +253,7 @@ def test_load_config_no_update_type_in_dev():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.update_type == 'test_manual'
 
@@ -287,7 +285,7 @@ def test_load_config_no_update_type():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.update_type == 'online'
 
@@ -320,7 +318,7 @@ def test_load_config_update_type_manual_packages():
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
             config_manager = ConfigManager('dummy_filename')
-            _, devices = config_manager.load_config()
+            devices, _ = config_manager.load_config()
             device = devices[0]
             assert device.packages == ['package1', 'package2']
 
@@ -519,9 +517,8 @@ def test_load_config_update_firmware_default():
     mock_data = _make_mock_data()
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
-            with patch('mu.configmanager.Logger'):
-                cm = ConfigManager('dummy')
-                devices, _ = cm.load_config()
+            cm = ConfigManager('dummy')
+            devices, _ = cm.load_config()
     assert devices[0].update_firmware is False
 
 
@@ -529,9 +526,8 @@ def test_load_config_update_firmware_global_true():
     mock_data = _make_mock_data(extra_global={'update_firmware': True})
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
-            with patch('mu.configmanager.Logger'):
-                cm = ConfigManager('dummy')
-                devices, _ = cm.load_config()
+            cm = ConfigManager('dummy')
+            devices, _ = cm.load_config()
     assert devices[0].update_firmware is True
 
 
@@ -542,9 +538,8 @@ def test_load_config_update_firmware_device_overrides_global():
     )
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
-            with patch('mu.configmanager.Logger'):
-                cm = ConfigManager('dummy')
-                devices, _ = cm.load_config()
+            cm = ConfigManager('dummy')
+            devices, _ = cm.load_config()
     assert devices[0].update_firmware is False
 
 
@@ -555,7 +550,6 @@ def test_load_config_update_firmware_device_true_global_false():
     )
     with patch('builtins.open', mock_open(read_data=yaml.dump(mock_data))):
         with patch('yaml.safe_load', return_value=mock_data):
-            with patch('mu.configmanager.Logger'):
-                cm = ConfigManager('dummy')
-                devices, _ = cm.load_config()
+            cm = ConfigManager('dummy')
+            devices, _ = cm.load_config()
     assert devices[0].update_firmware is True
