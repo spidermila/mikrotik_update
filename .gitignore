@@ -1,5 +1,6 @@
 /packages
 t.py
+.github/copilot-instructions.md
 
 # configuration files
 *.yaml

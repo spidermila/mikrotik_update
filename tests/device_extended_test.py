@@ -448,6 +448,70 @@ def test_refresh_update_info_channel_switch_no_update(dev):
     assert mock_set.call_args_list == [call('testing'), call('stable')]
 
 
+def test_refresh_update_info_polls_until_settled(dev):
+    """RouterOS reports 'checking for updates' asynchronously; we must
+    re-read `system package update print` until the status settles."""
+    dev.online_update_channel = 'stable'
+    checking = [
+        '  channel: stable',
+        '  status: checking for updates...',
+    ]
+    settled = [
+        '  installed-version: 7.14',
+        '  latest-version: 7.15',
+        '  status: New version is available',
+    ]
+    # ssh_call sequence: check-for-updates kick-off, then print (still
+    # checking), then print (still checking), then print (settled).
+    call_outputs = [[], checking, checking, settled]
+    with patch.object(dev, '_get_channel', return_value='stable'):
+        with patch.object(
+            dev, 'ssh_call', side_effect=call_outputs,
+        ) as mock_call:
+            with patch('mu.device.time.sleep'):
+                dev.refresh_update_info()
+    assert dev.update_available is True
+    assert dev.installed_version == '7.14'
+    assert dev.latest_version == '7.15'
+    # first call was check-for-updates, the rest were print reads
+    assert mock_call.call_args_list[0] == call(
+        'system package update check-for-updates',
+    )
+    assert all(
+        c == call('system package update print')
+        for c in mock_call.call_args_list[1:]
+    )
+
+
+def test_refresh_update_info_polling_timeout(dev):
+    """If the check never settles within the timeout, we log a warning
+    and fall back to the last observed (transient) output."""
+    dev.online_update_channel = 'stable'
+    checking = [
+        '  channel: stable',
+        '  status: checking for updates...',
+    ]
+    with patch.object(dev, '_get_channel', return_value='stable'):
+        with patch.object(dev, 'ssh_call', return_value=checking):
+            with patch('mu.device.time.sleep'):
+                # Advance the monotonic clock past the 30s deadline so
+                # the loop exits after a single iteration.
+                with patch(
+                    'mu.device.default_timer',
+                    side_effect=[0, 1000, 1000],
+                ):
+                    dev.refresh_update_info()
+    assert dev.update_available is False
+    dev.logger.log.assert_any_call(
+        'warning',
+        dev.name,
+        'check-for-updates did not settle within '
+        f'{Device.UPDATE_CHECK_POLL_TIMEOUT}s; '
+        'using last known status',
+        stdout=True,
+    )
+
+
 # ─── reboot_and_wait ─────────────────────────────────────────────────────────
 
 def test_reboot_and_wait_success(dev):
@@ -725,6 +789,39 @@ def test_routerboard_upgrade(dev):
     with patch.object(dev, 'ssh_call', return_value=[]) as mock_call:
         dev._routerboard_upgrade()
     mock_call.assert_called_with('system routerboard upgrade')
+
+
+def test_log_command_output_empty_output(dev):
+    dev._log_command_output('some cmd', [])
+    dev.logger.log.assert_called_once_with(
+        'info', dev.name, 'some cmd: (no output)',
+    )
+
+
+def test_log_command_output_with_lines(dev):
+    dev._log_command_output('some cmd', ['first', '', '  second  '])
+    calls = [c.args for c in dev.logger.log.call_args_list]
+    assert ('info', dev.name, 'some cmd:') in calls
+    assert ('info', dev.name, '  > first') in calls
+    assert ('info', dev.name, '  > second') in calls
+
+
+def test_reboot_logs_device_output(dev):
+    with patch.object(dev, 'ssh_call', return_value=['bye']):
+        dev._reboot()
+    calls = [c.args for c in dev.logger.log.call_args_list]
+    assert ('info', dev.name, 'system reboot:') in calls
+    assert ('info', dev.name, '  > bye') in calls
+
+
+def test_set_channel_logs_device_output(dev):
+    with patch.object(dev, 'ssh_call', return_value=['ok']):
+        dev._set_channel('stable')
+    calls = [c.args for c in dev.logger.log.call_args_list]
+    assert (
+        'info', dev.name, 'system package update set channel=stable:',
+    ) in calls
+    assert ('info', dev.name, '  > ok') in calls
 
 
 # ─── _upload_package ─────────────────────────────────────────────────────────

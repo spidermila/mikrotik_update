@@ -22,6 +22,12 @@ class Device:
     The class contains methods to communicate with the device,
     fetch information, perform backup and update.
     """
+
+    # Max seconds refresh_update_info will spend polling
+    # `system package update print` while RouterOS reports a transient
+    # status ("checking for updates", "searching", "downloading").
+    UPDATE_CHECK_POLL_TIMEOUT = 30
+
     def __init__(
             self,
             conf: Config,
@@ -57,6 +63,29 @@ class Device:
             f'current firmware: {self.current_firmware}, '
             f'upgrade firmware: {self.upgrade_firmware}'
         )
+        self.current_channel: str = ''
+        self.update_available: bool = False
+        self.firmware_reboot_pending: bool = False
+
+    # ---- thin public wrappers around the underscore-prefixed helpers ----
+    # These exist so external orchestrators (e.g. mu_tui) don't have to
+    # reach into the private API.
+
+    def get_channel(self) -> str:
+        """Return the active update channel on the device."""
+        return self._get_channel()
+
+    def set_channel(self, channel: str) -> None:
+        """Set the update channel on the device."""
+        self._set_channel(channel)
+
+    def stage_firmware_upgrade(self) -> None:
+        """Schedule a routerboard firmware upgrade for next reboot."""
+        self._routerboard_upgrade()
+
+    def reboot(self) -> None:
+        """Send the reboot command without waiting for the device."""
+        self._reboot()
 
     def _ssh_check(self) -> None:
         if not self.client:
@@ -67,6 +96,25 @@ class Device:
                 stdout=True,
             )
             raise SystemExit(1)
+
+    def _log_command_output(
+        self, command: str, output: list[str],
+    ) -> None:
+        """Log each non-empty line of a device response at info level.
+
+        Prefixed with ``>`` so it's obvious which lines came from the
+        device rather than from mu itself. Silent responses log a single
+        ``(no output)`` line so the user still sees that the command ran.
+        """
+        lines = [ln.strip() for ln in output if ln and ln.strip()]
+        if not lines:
+            self.logger.log(
+                'info', self.name, f'{command}: (no output)',
+            )
+            return
+        self.logger.log('info', self.name, f'{command}:')
+        for line in lines:
+            self.logger.log('info', self.name, f'  > {line}')
 
     def backup(self) -> bool:
         """
@@ -90,6 +138,7 @@ class Device:
             f'running backup to file {self.backup_file_full_name}',
         )
         output = self.ssh_call(f'system backup save name={backup_file_name}')
+        self._log_command_output('system backup save', output)
         if 'Configuration backup saved\r' not in output:
             self.logger.log(
                 'error',
@@ -394,6 +443,11 @@ class Device:
         self.installed_version (str - installed version)\n
         self.version_info_str (str - printable version summary)\n
         If needed, sets back the original channel.
+
+        RouterOS runs the check asynchronously: the first call typically
+        returns ``status: checking for updates`` before the result is
+        known. We re-read ``system package update print`` until the
+        status settles on a terminal value or a timeout is reached.
         """
         self._ssh_check()
         # set desired channel
@@ -402,7 +456,42 @@ class Device:
         if original_channel != self.online_update_channel:
             self._set_channel(self.online_update_channel)
             set_back_channel = True
-        output = self.ssh_call('system package update check-for-updates')
+
+        # Kick off the async check. The immediate output is often just
+        # "status: checking for updates..." and must not be trusted.
+        self.ssh_call('system package update check-for-updates')
+
+        transient_markers = (
+            'checking for updates',
+            'searching',
+            'downloading',
+        )
+        deadline = default_timer() + self.UPDATE_CHECK_POLL_TIMEOUT
+        output: list[str] = []
+        while True:
+            output = self.ssh_call('system package update print')
+            status_line = ''
+            for line in output:
+                if 'status:' in line:
+                    status_line = line.lower()
+                    break
+            if status_line and not any(
+                m in status_line for m in transient_markers
+            ):
+                break
+            if default_timer() >= deadline:
+                self.logger.log(
+                    'warning',
+                    self.name,
+                    'check-for-updates did not settle within '
+                    f'{self.UPDATE_CHECK_POLL_TIMEOUT}s; '
+                    'using last known status',
+                    stdout=True,
+                )
+                break
+            time.sleep(1)
+
+        self.update_available = False
         for line in output:
             if 'installed-version' in line:
                 self.installed_version = line.split()[1]
@@ -417,9 +506,6 @@ class Device:
             if 'status:' in line:
                 if 'New version is available' in line:
                     self.update_available = True
-                    if set_back_channel:
-                        self._set_channel(original_channel)
-                    return
                 if 'Downloaded, please reboot' in line:
                     self.logger.log(
                         'warning',
@@ -427,7 +513,6 @@ class Device:
                         'update already downloaded. reboot manually',
                         stdout=True,
                     )
-        self.update_available = False
         if set_back_channel:
             self._set_channel(original_channel)
 
@@ -688,7 +773,8 @@ class Device:
     def _delete_file(self, filename: str) -> None:
         """Delete file on the device using ssh_call."""
         self._ssh_check()
-        _ = self.ssh_call(f'file remove {filename}')
+        output = self.ssh_call(f'file remove {filename}')
+        self._log_command_output(f'file remove {filename}', output)
 
     def _downgrade(self) -> None:
         """
@@ -696,7 +782,8 @@ class Device:
         command over ssh_call.
         """
         self._ssh_check()
-        _ = self.ssh_call('system package downgrade\ny')
+        output = self.ssh_call('system package downgrade\ny')
+        self._log_command_output('system package downgrade', output)
 
     def _download_update(self) -> bool:
         """
@@ -706,6 +793,7 @@ class Device:
         """
         self._ssh_check()
         output = self.ssh_call('system package update download')
+        self._log_command_output('system package update download', output)
         for line in output:
             if 'status:' in line:
                 if 'Downloaded, please reboot' in line:
@@ -843,17 +931,22 @@ class Device:
     def _reboot(self) -> None:
         """Execute system reboot using ssh_call."""
         self._ssh_check()
-        _ = self.ssh_call('system reboot\ny')
+        output = self.ssh_call('system reboot\ny')
+        self._log_command_output('system reboot', output)
 
     def _routerboard_upgrade(self) -> None:
         """Schedule routerboard firmware upgrade for next boot."""
         self._ssh_check()
-        _ = self.ssh_call('system routerboard upgrade')
+        output = self.ssh_call('system routerboard upgrade')
+        self._log_command_output('system routerboard upgrade', output)
 
     def _set_channel(self, channel: str) -> None:
         """Set channel on the device using ssh_call."""
         self._ssh_check()
         output = self.ssh_call(f'system package update set channel={channel}')
+        self._log_command_output(
+            f'system package update set channel={channel}', output,
+        )
         if 'syntax error' in output:
             self.logger.log(
                 'error',
