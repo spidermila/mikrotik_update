@@ -115,3 +115,48 @@ All arguments of the `mu_screen` are passed to `mu`, so use it just as you would
 ```bash
 mu_screen --dry-run sample.yaml
 ```
+
+## mu_tui - Interactive Terminal UI
+`mu_tui` is a curses-based interactive frontend for `mu`. It uses the same yaml
+configuration files, but lets you watch your fleet and run actions on
+individual devices or selected groups of devices.
+
+- Browse the yaml files in a directory and pick one.
+- See all its devices in a table: identity, installed → latest RouterOS version,
+  update channel, update availability, firmware, and the status of the last job.
+- Run refresh, backup, RouterOS update, firmware update or reboot on the selected devices.
+  Every job runs in the background, in parallel with the others, and the device table
+  updates live as jobs start, finish or fail. Version info is refreshed after
+  updates and reboots.
+- Jobs on the same device wait for each other (shown as `…` queued).
+- Read the full output of any job in the jobs view.
+
+**Note:** unlike `mu`, the update action in `mu_tui` does not run a backup first.
+Run the backup action before updating if you need one.
+
+Start it in the directory with your yaml files, or point it to one:
+```bash
+mu_tui
+mu_tui -d /path/to/yaml/directory
+python -m mu_tui -d /path/to/yaml/directory
+```
+
+### Keys
+Common on all screens: `↑`/`↓` (or `k`) move, `j` jobs view, `Backspace`/`Esc`/`b` back, `q` quit.
+
+| Screen | Key | Action |
+|---|---|---|
+| File selection | `Enter` | open the yaml file |
+| | `r` | rescan the directory |
+| Device list | `Space` | select / deselect the device |
+| | `a` / `n` | select all / none |
+| | `r` | refresh info of the selected devices (all if none selected) |
+| | `x` | action menu for the selected devices (the device under the cursor if none selected) |
+| | `Enter` | device detail |
+| Device detail | `Enter` | run the highlighted action (also: change update channel, stage firmware upgrade for next reboot) |
+| Jobs | `Enter` | show the job log |
+| | `c` | clear finished jobs |
+| Job log | `PgUp`/`PgDn`, `Home` | scroll |
+| | `End` / `f` | follow the output |
+
+Job status markers: `…` queued, `▶` running, `✓` done, `✗` failed.
