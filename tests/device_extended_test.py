@@ -727,7 +727,7 @@ def test_manual_update_reboot_fails(dev, tmp_path):
 # ─── _get_identity ───────────────────────────────────────────────────────────
 
 def test_get_identity(dev):
-    with patch.object(dev, 'ssh_call', return_value=['name: myrouter']):
+    with patch.object(dev, 'ssh_call', return_value=['myrouter\r']):
         result = dev._get_identity()
     assert result == 'myrouter'
 
