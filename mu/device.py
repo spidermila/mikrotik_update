@@ -854,8 +854,10 @@ class Device:
     def _get_identity(self) -> str:
         """Get the device identity using ssh_call."""
         self._ssh_check()
-        output = self.ssh_call('system identity print')
-        return output[0].split()[1]
+        # 'system identity print' wraps long names one char per line
+        # when there is no terminal width, so ask for the raw value.
+        output = self.ssh_call(':put [/system identity get name]')
+        return output[0].strip()
 
     def _get_channel(self) -> str:
         """Get the active channel from the device using ssh_call."""
