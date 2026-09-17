@@ -546,7 +546,7 @@ def test_job_refresh_clears_firmware_pending(state, fake_device):
     fake_device.upgrade_firmware = '7.15'
     fake_device.get_channel.return_value = 'stable'
     job = tui.Job('r')
-    tui.job_refresh(state, [fake_device])(job)
+    tui.job_refresh(state, fake_device)(job)
     assert fake_device.firmware_reboot_pending is False
     assert state.info_fetched[fake_device.name] is True
 
@@ -563,59 +563,65 @@ def test_job_refresh_clears_info_fetched_upfront(state, fake_device):
 
     fake_device.ssh_connect.side_effect = watch_ssh_connect
     job = tui.Job('r')
-    tui.job_refresh(state, [fake_device])(job)
+    tui.job_refresh(state, fake_device)(job)
     assert seen == [False]
     assert state.info_fetched[fake_device.name] is True
 
 
-def test_job_refresh_parallel_for_multiple_devices(state):
-    """Refreshing multiple devices should fan out across a worker pool
-    (cap = 3) so a slow router doesn't serialise the whole batch.
+def test_jobs_for_different_devices_run_in_parallel(state):
+    """Each device gets its own job thread, with no worker cap.
 
-    We prove parallelism deterministically with a ``threading.Barrier``:
-    if the pool actually runs work in parallel, ``parties=3`` workers
-    will all reach the barrier and it releases. If the pool serialises,
-    the barrier times out and BrokenBarrierError is raised.
+    A ``threading.Barrier`` only releases if all jobs reach it at once.
     """
-    # Exactly _REFRESH_MAX_PARALLEL devices so a single barrier trip
-    # suffices; adding more would leave a short second batch that could
-    # never fill the barrier and would time out.
-    n = tui._REFRESH_MAX_PARALLEL
+    n = 5
     barrier = threading.Barrier(parties=n, timeout=2.0)
-
-    def connect_at_barrier():
-        # Blocks until enough peers arrive (or the barrier times out).
-        barrier.wait()
-
     devices = [
         _mock_device(name=f'r{i}', address=f'10.0.0.{i + 1}')
         for i in range(n)
     ]
     for d in devices:
-        d.ssh_connect.side_effect = connect_at_barrier
-
-    job = tui.Job('bulk')
-    # If parallelism is broken, connect_at_barrier will raise
-    # BrokenBarrierError, which _with_device surfaces via the job log.
-    tui.job_refresh(state, devices)(job)
-
+        d.ssh_connect.side_effect = lambda: barrier.wait()
+    screen = tui.DevicesScreen(state)
+    state.devices = devices
+    screen._submit('refresh', tui.job_refresh, devices)
+    jobs = state.jobs.all()
+    assert [j.device for j in jobs] == [d.name for d in devices]
+    for j in jobs:
+        _wait_finished(j)
+    assert all(j.status == 'done' for j in jobs)
     for d in devices:
         assert state.info_fetched[d.name] is True
-    assert not any(
-        'BrokenBarrierError' in ln for ln in job.snapshot()
-    ), 'refresh did not fan out concurrently'
 
 
-def test_job_refresh_continues_on_per_device_error(state):
-    """One device raising must not abort the batch for the others."""
-    good = _mock_device(name='good', address='10.0.0.1')
-    bad = _mock_device(name='bad', address='10.0.0.2')
-    bad.ssh_connect.side_effect = RuntimeError('boom')
+def test_job_marked_error_on_system_exit():
+    """Device raises SystemExit on SSH errors; the job must not hang."""
+    mgr = tui.JobManager()
 
-    job = tui.Job('bulk')
-    tui.job_refresh(state, [bad, good])(job)
-    assert state.info_fetched.get('good') is True
-    assert any('ERROR on bad' in ln for ln in job.snapshot())
+    def target(job):
+        raise SystemExit(1)
+
+    job = mgr.submit('bad', target)
+    _wait_finished(job)
+    assert job.status == 'error'
+    assert job.error == '1'
+
+
+def test_with_device_marks_job_queued_while_waiting(state, fake_device):
+    lock = state.lock_for(fake_device)
+    lock.acquire()
+    job = tui.Job('t', fake_device.name)
+    t = threading.Thread(
+        target=tui._with_device,
+        args=(state, fake_device, job, lambda d: None),
+    )
+    t.start()
+    end = time.time() + 1
+    while job.status != 'queued' and time.time() < end:
+        time.sleep(0.01)
+    assert job.status == 'queued'
+    lock.release()
+    t.join(timeout=1)
+    assert job.status == 'running'
 
 
 def test_job_apply_channel(state, fake_device):
@@ -643,21 +649,38 @@ def test_job_backup_success_and_failure(state, fake_device):
     job = tui.Job('b')
     fake_device.backup.return_value = True
     tui.job_backup(state, fake_device)(job)
+    assert 'backup + export OK' in '\n'.join(job.snapshot())
     fake_device.backup.return_value = False
-    tui.job_backup(state, fake_device)(job)
-    text = '\n'.join(job.snapshot())
-    assert 'backup + export OK' in text
-    assert 'backup FAILED' in text
+    with pytest.raises(RuntimeError, match='backup'):
+        tui.job_backup(state, fake_device)(job)
 
 
 def test_job_update_paths(state, fake_device):
-    # update available + firmware update
+    # update available + firmware update; info refreshed afterwards
     fake_device.get_update_available.return_value = True
     fake_device.update_firmware = True
+    fake_device.firmware_update.return_value = True
+
+    def do_update():
+        fake_device.installed_version = '7.16'
+    fake_device.update.side_effect = do_update
     job = tui.Job('u')
     tui.job_update(state, fake_device)(job)
     fake_device.update.assert_called_once()
     fake_device.firmware_update.assert_called_once()
+    fake_device.refresh_update_info.assert_called_once()
+    assert state.info_fetched[fake_device.name] is True
+
+    # version unchanged after update -> error
+    fake_device.update.side_effect = None
+    with pytest.raises(RuntimeError, match='still on 7.16'):
+        tui.job_update(state, fake_device)(tui.Job('u1'))
+
+    # firmware update fails -> error
+    fake_device.get_update_available.return_value = False
+    fake_device.firmware_update.return_value = False
+    with pytest.raises(RuntimeError, match='firmware'):
+        tui.job_update(state, fake_device)(tui.Job('u1b'))
 
     # no update available
     fake_device.reset_mock()
@@ -670,6 +693,18 @@ def test_job_update_paths(state, fake_device):
     assert any(
         'no update available' in ln for ln in job2.snapshot()
     )
+
+
+def test_job_firmware_update(state, fake_device):
+    fake_device.firmware_reboot_pending = True
+    fake_device.firmware_update.return_value = True
+    tui.job_firmware_update(state, fake_device)(tui.Job('f'))
+    assert fake_device.firmware_reboot_pending is False
+    assert state.info_fetched[fake_device.name] is True
+
+    fake_device.firmware_update.return_value = False
+    with pytest.raises(RuntimeError, match='firmware update failed'):
+        tui.job_firmware_update(state, fake_device)(tui.Job('f2'))
 
 
 def test_job_stage_firmware_stages_and_noops(state, fake_device):
@@ -701,15 +736,16 @@ def test_job_reboot_clears_firmware_pending_on_success(state, fake_device):
     fake_device.reboot_and_wait.assert_called_once()
     assert fake_device.firmware_reboot_pending is False
     assert any('reboot complete' in ln for ln in job.snapshot())
+    assert state.info_fetched[fake_device.name] is True
 
 
 def test_job_reboot_keeps_firmware_pending_on_timeout(state, fake_device):
     fake_device.firmware_reboot_pending = True
     fake_device.reboot_and_wait.return_value = False
     job = tui.Job('rb')
-    tui.job_reboot(state, fake_device)(job)
+    with pytest.raises(RuntimeError, match='timed out'):
+        tui.job_reboot(state, fake_device)(job)
     assert fake_device.firmware_reboot_pending is True
-    assert any('timed out' in ln for ln in job.snapshot())
 
 
 # ---------- YamlSelectScreen ----------
@@ -856,25 +892,57 @@ def test_devices_screen_draw_scroll_and_overflow(fake_device):
     screen.draw(FakeWin(6, 60))  # scroll top backward
 
 
-def test_devices_screen_info_line_all_variants(state, fake_device):
+def test_devices_screen_info_cells_all_variants(state, fake_device):
     screen = tui.DevicesScreen(state)
     # not fetched
-    assert 'no info' in screen._info_line(fake_device)
+    assert screen._info_cells(fake_device)[0] == '(no info)'
     # fetched, avail True
     state.info_fetched[fake_device.name] = True
-    assert 'upd:yes' in screen._info_line(fake_device)
+    cells = screen._info_cells(fake_device)
+    assert cells == ['router', '7.15→7.16', 'stable', 'yes', '7.15', '']
     # avail False
     fake_device.update_available = False
-    assert 'upd:no' in screen._info_line(fake_device)
+    assert screen._info_cells(fake_device)[3] == 'no'
     # avail None (unknown)
     fake_device.update_available = None
-    assert 'upd:?' in screen._info_line(fake_device)
-    # firmware pending appended
+    assert screen._info_cells(fake_device)[3] == '?'
+    # firmware pending
     fake_device.firmware_reboot_pending = True
-    assert 'REBOOT PENDING' in screen._info_line(fake_device)
+    assert 'reboot pending' in screen._info_cells(fake_device)[5]
     # missing identity path
     fake_device.identity = ''
-    assert 'id:?' in screen._info_line(fake_device)
+    assert screen._info_cells(fake_device)[0] == '?'
+
+
+def test_table_aligns_and_drops_empty_columns():
+    lines = tui._table([
+        ['NAME', 'X', 'JOB'],
+        ['a', '', '▶ update'],
+        ['longname', '', ''],
+    ])
+    assert lines == [
+        'NAME      JOB',
+        'a         ▶ update',
+        'longname',
+    ]
+
+
+def test_devices_screen_layout_one_and_two_rows(fake_device):
+    st, screen = _screen_with_devices(fake_device)
+    st.info_fetched[fake_device.name] = True
+    heads, lines = screen._layout(200)
+    assert len(heads) == 1 and all(len(r) == 1 for r in lines)
+    # columns line up: VERSION starts at the same offset in every row
+    col = heads[0].index('VERSION')
+    assert lines[0][0][col:].startswith('7.15→7.16')
+    # a long error in the last column is clipped, not a reason to wrap
+    job = tui.Job(f'reboot {fake_device.name}', fake_device.name)
+    job.status, job.error = 'error', 'x' * 300
+    st.jobs.jobs.append(job)
+    assert len(screen._layout(120)[0]) == 1
+    heads, lines = screen._layout(40)
+    assert len(heads) == 2 and all(len(r) == 2 for r in lines)
+    assert heads[1].lstrip().startswith('IDENTITY')
 
 
 def test_devices_screen_handle_all_keys(fake_device, monkeypatch):
@@ -901,14 +969,15 @@ def test_devices_screen_handle_all_keys(fake_device, monkeypatch):
     screen.handle(FakeWin(), ord('a'))  # all
     screen.handle(FakeWin(), ord('n'))  # none
 
-    # 'r' refresh with selected -> stays on screen, records last_refresh_job
+    # 'r' refresh with selected -> one job per device, stays on screen
     screen.handle(FakeWin(), ord('a'))
-    monkeypatch.setattr(tui, 'job_refresh', lambda s, ds: (lambda job: None))
+    monkeypatch.setattr(tui, 'job_refresh', lambda s, d: (lambda job: None))
     assert screen.handle(FakeWin(), ord('r')) is screen
-    assert screen.last_refresh_job is not None
-    # 'r' refresh with none selected -> same behaviour
+    assert len(st.jobs.all()) == len(st.devices)
+    # 'r' refresh with none selected -> all devices
     screen.handle(FakeWin(), ord('n'))
     assert screen.handle(FakeWin(), ord('r')) is screen
+    assert len(st.jobs.all()) == 2 * len(st.devices)
 
     # Enter -> DeviceDetailScreen
     result = screen.handle(FakeWin(), curses.KEY_ENTER)
@@ -981,7 +1050,9 @@ def test_device_detail_action_invocations(fake_device, monkeypatch):
     submitted = []
     monkeypatch.setattr(
         st.jobs, 'submit',
-        lambda name, target: submitted.append(name) or tui.Job(name),
+        lambda name, target, device=None: (
+            submitted.append(name) or tui.Job(name, device)
+        ),
     )
     screen.act_refresh(FakeWin())
     assert submitted[-1].startswith('refresh ')
@@ -1010,6 +1081,13 @@ def test_device_detail_action_invocations(fake_device, monkeypatch):
     screen.act_update(FakeWin())
     monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: True)
     screen.act_update(FakeWin())
+
+    # Firmware update: cancel + confirm
+    monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: False)
+    screen.act_firmware(FakeWin())
+    monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: True)
+    screen.act_firmware(FakeWin())
+    assert submitted[-1] == f'firmware {fake_device.name}'
 
     # Stage FW: cancel + confirm
     monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: False)
@@ -1050,6 +1128,8 @@ def test_job_status_line_variants():
     job = tui.Job('t')
     running = tui._job_status_line(job)
     assert '▶' in running and 'running' in running
+    job.status = 'queued'
+    assert 'waiting for device' in tui._job_status_line(job)
     job.status = 'done'
     job.finished = job.started + 1
     done = tui._job_status_line(job)
@@ -1063,26 +1143,60 @@ def test_job_status_line_variants():
     assert '?' in other
 
 
-def test_devices_screen_draws_status_line(fake_device):
+def test_devices_screen_shows_live_job_status(fake_device):
     st, screen = _screen_with_devices(fake_device)
-    screen.last_refresh_job = tui.Job('r')
-    screen.last_refresh_job.status = 'done'
-    screen.last_refresh_job.finished = screen.last_refresh_job.started + 1
-    win = FakeWin(24, 120)
-    screen.draw(win)
-    rendered = [c for c in win.calls if c[0] == 'addstr']
-    assert any('success' in c[3] for c in rendered)
+
+    def rendered():
+        win = FakeWin(24, 120)
+        screen.draw(win)
+        return [c[3] for c in win.calls if c[0] == 'addstr']
+
+    job = tui.Job(f'update {fake_device.name}', fake_device.name)
+    st.jobs.jobs.append(job)
+    assert any('▶ update' in ln for ln in rendered())
+    job.status = 'queued'
+    assert any('… update' in ln for ln in rendered())
+    job.status = 'error'
+    job.error = 'boom'
+    assert any('✗ update: boom' in ln for ln in rendered())
+    job2 = tui.Job(f'channel {fake_device.name} -> testing', fake_device.name)
+    job2.status = 'done'
+    st.jobs.jobs.append(job2)
+    assert any('✓ channel -> testing' in ln for ln in rendered())
 
 
-def test_devices_screen_draws_status_line_when_empty(state):
-    screen = tui.DevicesScreen(state)
-    screen.last_refresh_job = tui.Job('r')
-    screen.last_refresh_job.status = 'error'
-    screen.last_refresh_job.error = 'nope'
-    win = FakeWin(24, 80)
-    screen.draw(win)
-    rendered = [c for c in win.calls if c[0] == 'addstr']
-    assert any('FAILED' in c[3] for c in rendered)
+def test_devices_screen_action_menu(fake_device, monkeypatch):
+    st, screen = _screen_with_devices(fake_device)
+    submitted = []
+    monkeypatch.setattr(
+        st.jobs, 'submit',
+        lambda name, target, device=None: submitted.append((name, device)),
+    )
+    # cancel menu
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: None)
+    screen.handle(FakeWin(), ord('x'))
+    assert submitted == []
+    # refresh needs no confirm; nothing selected -> cursor device only
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: 'Refresh info')
+    monkeypatch.setattr(
+        tui, 'popup_confirm', lambda *a, **k: pytest.fail('no confirm'),
+    )
+    screen.handle(FakeWin(), ord('x'))
+    assert submitted == [(f'refresh {fake_device.name}', fake_device.name)]
+    # reboot declined
+    submitted.clear()
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: 'Reboot')
+    monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: False)
+    screen.handle(FakeWin(), ord('x'))
+    assert submitted == []
+    # firmware update on all selected devices
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: 'Update firmware')
+    monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: True)
+    screen.handle(FakeWin(), ord('a'))
+    screen.handle(FakeWin(), ord('x'))
+    assert [n for n, _ in submitted] == [
+        f'firmware {d.name}' for d in st.devices
+    ]
 
 
 def test_device_detail_draws_status_line(fake_device):
