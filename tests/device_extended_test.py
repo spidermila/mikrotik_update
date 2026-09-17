@@ -732,6 +732,12 @@ def test_get_identity(dev):
     assert result == 'myrouter'
 
 
+def test_get_identity_empty_output(dev):
+    with patch.object(dev, 'ssh_call', return_value=[]):
+        result = dev._get_identity()
+    assert result == ''
+
+
 # ─── _get_channel ────────────────────────────────────────────────────────────
 
 def test_get_channel_found(dev):
