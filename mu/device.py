@@ -884,6 +884,16 @@ class Device:
         names = [name for _, name in backups[:max(0, len(backups) - keep)]]
         kept = len(backups) - len(names)
         if dry_run:
+            # Mirror _delete_file, which refuses names containing a comma.
+            refused = [n for n in names if ',' in n]
+            names = [n for n in names if ',' not in n]
+            for name in refused:
+                self.logger.log(
+                    'error',
+                    self.name,
+                    f'would refuse to delete {name}: name contains a comma',
+                    stdout=True,
+                )
             for name in names:
                 self.logger.log(
                     'info', self.name, f'would delete backup {name}',
@@ -896,7 +906,7 @@ class Device:
                 f'delete {len(names)} backup file(s)',
                 stdout=True,
             )
-            return True, names
+            return not refused, names
         deleted: list[str] = []
         failed = 0
         for name in names:

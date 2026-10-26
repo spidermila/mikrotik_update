@@ -1153,6 +1153,16 @@ def test_cleanup_refuses_comma_names(dev):
     assert removed == []
 
 
+def test_cleanup_dry_run_refuses_comma_names(dev):
+    comma = 'jan/01/2024 10:00:00|backup|a.rsc,b.backup\r'
+    fake = _fake([comma, C])
+    with patch.object(dev, 'ssh_call', side_effect=fake):
+        ok, names = dev.cleanup_backups(0, dry_run=True)
+    assert ok is False
+    assert names == ['C.backup']
+    assert fake.removed == []
+
+
 def test_parse_ros_time():
     assert _parse_ros_time('jan/02/2024 10:00:00').month == 1
     assert _parse_ros_time('2024-02-03 10:00:00').day == 3
