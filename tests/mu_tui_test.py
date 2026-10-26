@@ -129,6 +129,8 @@ def _mock_device(
     d.update_available = True
     d.packages = []
     d.firmware_reboot_pending = False
+    d.backup_count = None
+    d.free_space = None
     d.get_channel.return_value = 'stable'
     for k, v in overrides.items():
         setattr(d, k, v)
@@ -899,7 +901,9 @@ def test_devices_screen_info_cells_all_variants(state, fake_device):
     # fetched, avail True
     state.info_fetched[fake_device.name] = True
     cells = screen._info_cells(fake_device)
-    assert cells == ['router', '7.15→7.16', 'stable', 'yes', '7.15', '']
+    assert cells == [
+        'router', '7.15→7.16', 'stable', 'yes', '7.15', '', '?', '?',
+    ]
     # avail False
     fake_device.update_available = False
     assert screen._info_cells(fake_device)[3] == 'no'
@@ -943,6 +947,7 @@ def test_devices_screen_layout_one_and_two_rows(fake_device):
     heads, lines = screen._layout(40)
     assert len(heads) == 2 and all(len(r) == 2 for r in lines)
     assert heads[1].lstrip().startswith('IDENTITY')
+    assert 'BACKUPS' in heads[1]
 
 
 def test_devices_screen_handle_all_keys(fake_device, monkeypatch):
@@ -1393,3 +1398,126 @@ def test_dunder_main_executed_as_script(monkeypatch):
     with pytest.raises(SystemExit) as ei:
         runpy.run_module('mu_tui', run_name='__main__')
     assert ei.value.code == 1
+
+
+# ---------- backup cleanup / storage info ----------
+
+
+def test_fmt_bytes_and_count():
+    assert tui._fmt_bytes(None) == '?'
+    assert tui._fmt_bytes(512) == '512 B'
+    assert tui._fmt_bytes(120 * 1024**2) == '120.0 MiB'
+    assert tui._fmt_bytes(5 * 1024**4) == '5.0 TiB'
+    assert tui._fmt_count(None) == '?'
+    assert tui._fmt_count(3) == '3'
+
+
+def test_job_refresh_writes_storage_info(state, fake_device):
+    fake_device.backup_count = 3
+    fake_device.free_space = 120 * 1024**2
+    job = tui.Job('r')
+    tui.job_refresh(state, fake_device)(job)
+    fake_device.refresh_storage_info.assert_called_once()
+    log = '\n'.join(job.snapshot())
+    assert 'backup files:       3' in log
+    assert 'free space:         120.0 MiB' in log
+    assert state.info_fetched[fake_device.name] is True
+
+
+def test_info_cells_and_detail_show_storage(state, fake_device):
+    fake_device.backup_count = 3
+    fake_device.free_space = 120 * 1024**2
+    screen = tui.DevicesScreen(state)
+    assert screen._info_cells(fake_device)[-2:] == ['', '']
+    state.info_fetched[fake_device.name] = True
+    assert screen._info_cells(fake_device)[-2:] == ['3', '120.0 MiB']
+    _, _, detail = _detail_screen(fake_device)
+    detail.state.info_fetched[fake_device.name] = False
+    assert not any('Backup files' in ln for ln in detail._info_lines())
+    detail.state.info_fetched[fake_device.name] = True
+    lines = detail._info_lines()
+    assert 'Backup files on device: 3' in lines
+    assert any('120.0 MiB' in ln for ln in lines)
+
+
+def test_cleanup_in_action_lists(fake_device):
+    assert 'Clean up device backups' in [a[0] for a in tui.DEVICE_ACTIONS]
+    _, _, detail = _detail_screen(fake_device)
+    assert 'Clean up device backups' in [a[0] for a in detail.actions]
+
+
+def test_job_cleanup_backups_success_failure_and_order(state, fake_device):
+    calls = MagicMock()
+    fake_device.cleanup_backups = calls.cleanup
+    fake_device.refresh_storage_info = calls.refresh
+    calls.cleanup.return_value = (True, ['a.backup'])
+    fake_device.backup_count = 1
+    job = tui.Job('c')
+    tui.job_cleanup_backups(state, fake_device, 2)(job)
+    assert [c[0] for c in calls.mock_calls[:2]] == ['cleanup', 'refresh']
+    calls.cleanup.assert_called_with(2)
+    assert 'backup files on device: 1' in '\n'.join(job.snapshot())
+    calls.cleanup.return_value = (False, [])
+    with pytest.raises(RuntimeError, match='cleanup'):
+        tui.job_cleanup_backups(state, fake_device)(job)
+    calls.cleanup.assert_called_with(1)
+
+
+def test_cleanup_prompts_detail_and_menu(fake_device, monkeypatch):
+    st, screen = _screen_with_devices(fake_device)
+    _, _, detail = _detail_screen(fake_device)
+    submitted = []
+    monkeypatch.setattr(
+        st.jobs, 'submit',
+        lambda name, target, device=None: submitted.append((name, device)),
+    )
+    detail.state.jobs = st.jobs
+    # cancelled select: confirm is never asked
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: None)
+    monkeypatch.setattr(
+        tui, 'popup_confirm', lambda *a, **k: pytest.fail('no confirm'),
+    )
+    assert detail.act_cleanup(FakeWin()) is None
+    screen.handle(FakeWin(), ord('x'))
+    assert submitted == []
+    # declined confirm
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: '1')
+    monkeypatch.setattr(tui, 'popup_confirm', lambda *a, **k: False)
+    detail.act_cleanup(FakeWin())
+    assert submitted == []
+    # confirmed on two devices from the menu, one job each
+    asked = []
+    monkeypatch.setattr(
+        tui, 'popup_select',
+        lambda s, title, opts: (
+            'Clean up device backups' if title.startswith('Action')
+            else '0'
+        ),
+    )
+    monkeypatch.setattr(
+        tui, 'popup_confirm', lambda s, msg: asked.append(msg) or True,
+    )
+    screen.handle(FakeWin(), ord('a'))
+    screen.handle(FakeWin(), ord('x'))
+    assert [n for n, _ in submitted] == [
+        f'cleanup {d.name}' for d in st.devices
+    ]
+    assert 'ALL' in asked[0]
+    # detail screen, default keep
+    submitted.clear()
+    monkeypatch.setattr(tui, 'popup_select', lambda *a, **k: '1')
+    detail.act_cleanup(FakeWin())
+    assert submitted == [(f'cleanup {fake_device.name}', fake_device.name)]
+
+
+def test_job_refresh_unknown_storage_renders_question_marks(
+    state, fake_device,
+):
+    fake_device.backup_count = None
+    fake_device.free_space = None
+    job = tui.Job('r')
+    tui.job_refresh(state, fake_device)(job)  # must not raise
+    log = '\n'.join(job.snapshot())
+    assert 'backup files:       ?' in log
+    assert 'free space:         ?' in log
+    assert state.info_fetched[fake_device.name] is True

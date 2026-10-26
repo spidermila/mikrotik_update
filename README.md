@@ -58,6 +58,12 @@ python -m mu sample.yaml
                       without performing the backup and update.
 -U, --update-only     Only perform update.
 -B, --backup-only     Only perform backup and download the backup file.
+-C, --cleanup-backups
+                      Only delete old .backup files stored on the devices,
+                      keeping the newest N (see -k). Cannot be combined with
+                      -U or -B. With -D only lists the files to be deleted.
+-k, --keep-backups N  Number of newest .backup files to keep on the device
+                      with -C (default: 1, 0 deletes all).
 -d DEVICE_NAME        Specify device name(s) as per your configuration file.
                       Can be used multiple times to specify multiple devices.
                       If no device specified, all devices will be used.
@@ -123,8 +129,11 @@ individual devices or selected groups of devices.
 
 - Browse the yaml files in a directory and pick one.
 - See all its devices in a table: identity, installed → latest RouterOS version,
-  update channel, update availability, firmware, and the status of the last job.
-- Run refresh, backup, RouterOS update, firmware update or reboot on the selected devices.
+  update channel, update availability, firmware, the number of `.backup` files
+  on the device (BACKUPS), the free storage space (FREE), and the status of the
+  last job. BACKUPS and FREE are fetched together with the other info on refresh.
+- Run refresh, backup, backup cleanup (delete all but the newest 1, 2, 3, 5 or 0
+  `.backup` files on the device, after a confirmation), RouterOS update, firmware update or reboot on the selected devices.
   Every job runs in the background, in parallel with the others, and the device table
   updates live as jobs start, finish or fail. Version info is refreshed after
   updates and reboots.
