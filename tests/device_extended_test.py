@@ -7,6 +7,10 @@ import paramiko
 import pytest
 
 from mu.config import Config
+from mu.device import _FREE_SPACE_CMD
+from mu.device import _LIST_FILES_CMD
+from mu.device import _parse_ros_time
+from mu.device import _ros_quote
 from mu.device import Device
 from mu.logger import Logger
 
@@ -274,6 +278,20 @@ def test_backup_with_delete(dev):
                         result = dev.backup()
     assert result is True
     mock_delete.assert_called_once()
+
+
+def test_backup_delete_refuses_comma_name(dev):
+    dev.identity = 'my,router'
+    dev.conf.delete_backup_after_download = True
+    saved = ['Configuration backup saved\r']
+    with patch.object(dev, 'ssh_call', return_value=saved) as ssh:
+        with patch('mu.device.SCPClient'):
+            with patch.object(pathlib.Path, 'mkdir'):
+                with patch.object(dev, 'export_config', return_value=True):
+                    result = dev.backup()
+    assert result is True
+    assert ',' in dev.backup_file_full_name
+    assert not any('remove' in str(c) for c in ssh.call_args_list)
 
 
 # ─── export_config ───────────────────────────────────────────────────────────
@@ -769,8 +787,13 @@ def test_set_channel_syntax_error(dev):
 
 def test_delete_file(dev):
     with patch.object(dev, 'ssh_call', return_value=[]) as mock_call:
-        dev._delete_file('myfile.backup')
-    mock_call.assert_called_with('file remove myfile.backup')
+        assert dev._delete_file('myfile.backup') is True
+    mock_call.assert_called_with('/file remove "myfile.backup"')
+
+
+def test_delete_file_reports_error_output(dev):
+    with patch.object(dev, 'ssh_call', return_value=['no such item\r']):
+        assert dev._delete_file('x.backup') is False
 
 
 # ─── _reboot ─────────────────────────────────────────────────────────────────
@@ -958,3 +981,197 @@ def test_backup_client_none_after_check(disconnected_dev):
                 ):
                     result = disconnected_dev.backup()
     assert result is False
+
+
+# ─── backup cleanup ──────────────────────────────────────────────────────────
+
+A = 'jan/02/2024 10:00:00|backup|A.backup\r'
+B = '2024-02-03 10:00:00|backup|B.backup\r'
+C = 'mar/04/2024 10:00:00|backup|C.backup\r'
+
+
+def _fake(listing, remove=None, free=('129394278\r',)):
+    """ssh_call replacement; `remove` maps file name to output lines."""
+    removed: list[str] = []
+
+    def fake(cmd):
+        if cmd == _LIST_FILES_CMD:
+            if isinstance(listing, Exception):
+                raise listing
+            return list(listing)
+        if cmd == _FREE_SPACE_CMD:
+            if isinstance(free, Exception):
+                raise free
+            return list(free)
+        assert cmd.startswith('/file remove ')
+        name = cmd[len('/file remove "'):-1]
+        removed.append(name)
+        return (remove or {}).get(name, [])
+
+    fake.removed = removed  # type: ignore[attr-defined]
+    return fake
+
+
+def _cleanup(dev, listing, keep=1, **kw):
+    fake = _fake(listing, **kw)
+    with patch.object(dev, 'ssh_call', side_effect=fake):
+        return dev.cleanup_backups(keep), fake.removed
+
+
+def test_cleanup_keep_1_2_0(dev):
+    assert _cleanup(dev, [C, A, B]) == (
+        (True, ['A.backup', 'B.backup']), ['A.backup', 'B.backup'],
+    )
+    assert _cleanup(dev, [A, B, C], keep=2) == (
+        (True, ['A.backup']), ['A.backup'],
+    )
+    assert _cleanup(dev, [A, B, C], keep=0)[1] == [
+        'A.backup', 'B.backup', 'C.backup',
+    ]
+
+
+def test_cleanup_nothing_to_delete(dev):
+    assert _cleanup(dev, [A]) == ((True, []), [])
+    assert _cleanup(dev, []) == ((True, []), [])
+    assert _cleanup(dev, ['jan/02/2024 10:00:00|file|x.rsc\r']) == (
+        (True, []), [],
+    )
+
+
+def test_cleanup_only_top_level_backup_files(dev):
+    listing = [
+        'jan/02/2024 10:00:00|script|x.rsc\r',
+        'jan/02/2024 10:00:00|package|y.npk\r',
+        'jan/02/2024 10:00:00|backup|z.backup\r',
+        'jan/02/2024 10:00:00|backup|flash/q.backup\r',
+        'jan/02/2024 10:00:00|directory|d.backup\r',
+        '',
+    ]
+    assert _cleanup(dev, listing, keep=0)[1] == ['z.backup']
+
+
+def test_cleanup_orders_by_time_then_name(dev):
+    listing = [
+        'jan/01/2024 10:00:00|backup|z-old.backup\r',
+        'feb/01/2024 10:00:00|backup|a-new.backup\r',
+    ]
+    assert _cleanup(dev, listing)[1] == ['z-old.backup']
+    tie = [
+        'jan/01/2024 10:00:00|backup|a.backup\r',
+        'jan/01/2024 10:00:00|backup|b.backup\r',
+    ]
+    assert _cleanup(dev, tie)[1] == ['a.backup']
+
+
+@pytest.mark.parametrize('keep', [-1, 'a', 1.5, True])
+def test_cleanup_rejects_bad_keep(dev, keep):
+    with patch.object(dev, 'ssh_call') as mock_call:
+        with pytest.raises(ValueError):
+            dev.cleanup_backups(keep)
+    mock_call.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    'listing',
+    [
+        RuntimeError('boom'),
+        ['syntax error (line 1 column 5)'],
+        ['garbage|backup|A.backup\r'],
+        ['|backup|A.backup\r'],
+    ],
+)
+def test_cleanup_refuses_on_bad_listing(dev, listing):
+    result, removed = _cleanup(dev, listing, keep=0)
+    assert result == (False, [])
+    assert removed == []
+    assert dev.logger.log.call_args_list[0].args[0] == 'error'
+
+
+def test_cleanup_continues_after_failed_delete(dev):
+    result, removed = _cleanup(
+        dev, [A, B, C], keep=0, remove={'B.backup': ['no such item\r']},
+    )
+    assert result == (False, ['A.backup', 'C.backup'])
+    assert removed == ['A.backup', 'B.backup', 'C.backup']
+    dev.logger.log.assert_any_call(
+        'error', 'router', 'failed to delete backup B.backup', stdout=True,
+    )
+
+
+def test_cleanup_exception_in_delete_is_failure(dev):
+    fake = _fake([A, B])
+
+    def raising(cmd):
+        if cmd.startswith('/file remove'):
+            raise OSError('lost')
+        return fake(cmd)
+
+    with patch.object(dev, 'ssh_call', side_effect=raising):
+        assert dev.cleanup_backups(0) == (False, [])
+
+
+def test_cleanup_logs_each_file_and_summary(dev):
+    _cleanup(dev, [A, B, C])
+    dev.logger.log.assert_any_call(
+        'info', 'router', 'deleted backup A.backup', stdout=True,
+    )
+    dev.logger.log.assert_any_call(
+        'info', 'router', 'backup cleanup: kept 1, deleted 2', stdout=True,
+    )
+
+
+def test_cleanup_dry_run_deletes_nothing(dev):
+    fake = _fake([A, B, C])
+    with patch.object(dev, 'ssh_call', side_effect=fake):
+        result = dev.cleanup_backups(1, dry_run=True)
+    assert result == (True, ['A.backup', 'B.backup'])
+    assert fake.removed == []
+    dev.logger.log.assert_any_call(
+        'info', 'router', 'would delete backup A.backup', stdout=True,
+    )
+
+
+def test_ros_quote_escapes_everything_unsafe():
+    assert _ros_quote('a b".backup') == '"a\\20b\\22.backup"'
+    quoted = _ros_quote('$x[y];\\?.backup')
+    assert not any(c in quoted[1:-1] for c in '$[]";?')
+    assert _ros_quote('\u00e9') == '"\\C3\\A9"'
+
+
+def test_cleanup_quotes_odd_names(dev):
+    name = 'we ird"$x.backup'
+    with patch.object(dev, 'ssh_call', return_value=[]) as mock_call:
+        dev._delete_file(name)
+    mock_call.assert_called_once_with('/file remove ' + _ros_quote(name))
+
+
+def test_cleanup_refuses_comma_names(dev):
+    comma = 'jan/01/2024 10:00:00|backup|a.rsc,b.backup\r'
+    (ok, names), removed = _cleanup(dev, [comma], keep=0)
+    assert ok is False
+    assert names == []
+    assert removed == []
+
+
+def test_parse_ros_time():
+    assert _parse_ros_time('jan/02/2024 10:00:00').month == 1
+    assert _parse_ros_time('2024-02-03 10:00:00').day == 3
+    assert _parse_ros_time('nope') is None
+    assert _parse_ros_time('') is None
+
+
+def test_refresh_storage_info(dev):
+    with patch.object(dev, 'ssh_call', side_effect=_fake([A, B, C])):
+        dev.refresh_storage_info()
+    assert dev.backup_count == 3
+    assert dev.free_space == 129394278
+
+
+@pytest.mark.parametrize('free', [RuntimeError('x'), ['bad'], []])
+def test_refresh_storage_info_failures_leave_unknown(dev, free):
+    dev.backup_count, dev.free_space = 5, 5
+    fake = _fake(RuntimeError('x'), free=free)
+    with patch.object(dev, 'ssh_call', side_effect=fake):
+        dev.refresh_storage_info()
+    assert dev.backup_count is None
+    assert dev.free_space is None

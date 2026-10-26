@@ -13,6 +13,40 @@ from mu.logger import Logger
 from mu.userregistrator import UserRegistrator
 # paramiko.common.logging.basicConfig(level=paramiko.common.DEBUG)
 
+# One line per file: <time>|<type>|<name>. The name goes last so names
+# containing "|" survive the split.
+_LIST_FILES_CMD = (
+    ':foreach f in=[/file find] do={'
+    ':local t ""; '
+    ':do {:set t [/file get $f creation-time]} on-error={'
+    ':do {:set t [/file get $f last-modified]} on-error={}}; '
+    ':put ($t . "|" . [/file get $f type] . "|" . [/file get $f name])}'
+)
+_FREE_SPACE_CMD = ':put [/system resource get free-hdd-space]'
+_ROS_TIME_FORMATS = ('%b/%d/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S')  # v6 / v7.10+
+_ROS_SAFE_BYTES = (
+    b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-'
+)
+
+
+def _ros_quote(value: str) -> str:
+    """Quote a string for RouterOS, escaping every unsafe byte as \\HH."""
+    escaped = ''.join(
+        chr(b) if b in _ROS_SAFE_BYTES else f'\\{b:02X}'
+        for b in value.encode()
+    )
+    return f'"{escaped}"'
+
+
+def _parse_ros_time(s: str) -> datetime | None:
+    """Parse a RouterOS file time, None if the format is not known."""
+    for fmt in _ROS_TIME_FORMATS:
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
 
 class Device:
     """
@@ -66,6 +100,8 @@ class Device:
         self.current_channel: str = ''
         self.update_available: bool = False
         self.firmware_reboot_pending: bool = False
+        self.backup_count: int | None = None
+        self.free_space: int | None = None
 
     # ---- thin public wrappers around the underscore-prefixed helpers ----
     # These exist so external orchestrators (e.g. mu_tui) don't have to
@@ -770,11 +806,138 @@ class Device:
                 return False
         return False
 
-    def _delete_file(self, filename: str) -> None:
-        """Delete file on the device using ssh_call."""
+    def _delete_file(self, filename: str) -> bool:
+        """Delete file on the device using ssh_call.
+
+        Returns True when the device printed nothing (success).
+        """
+        if ',' in filename:
+            self.logger.log(
+                'error',
+                self.name,
+                f'refusing to delete {filename}: name contains a comma',
+                stdout=True,
+            )
+            return False
         self._ssh_check()
-        output = self.ssh_call(f'file remove {filename}')
-        self._log_command_output(f'file remove {filename}', output)
+        command = f'/file remove {_ros_quote(filename)}'
+        output = self.ssh_call(command)
+        self._log_command_output(command, output)
+        return not any(ln.strip() for ln in output)
+
+    def list_backups(self) -> list[tuple[datetime, str]] | None:
+        """List top-level .backup files, oldest first.
+
+        Returns None (after logging an error) when the listing cannot be
+        trusted, so callers never delete based on a guess.
+        """
+        try:
+            lines = self.ssh_call(_LIST_FILES_CMD)
+        except Exception as e:
+            self._listing_failed(str(e))
+            return None
+        result: list[tuple[datetime, str]] = []
+        for line in lines:
+            line = line.rstrip('\r\n')
+            if not line.strip():
+                continue
+            parts = line.split('|', 2)
+            if len(parts) != 3:
+                self._listing_failed(f'unexpected output: {line}')
+                return None
+            t, ftype, name = parts
+            if (
+                not name.endswith('.backup')
+                or '/' in name
+                or ftype == 'directory'
+            ):
+                continue
+            created = _parse_ros_time(t.strip())
+            if created is None:
+                self._listing_failed(f'unknown creation time for {name}: {t}')
+                return None
+            result.append((created, name))
+        return sorted(result)
+
+    def _listing_failed(self, reason: str) -> None:
+        """Log a listing failure."""
+        self.logger.log(
+            'error',
+            self.name,
+            f'listing backup files failed: {reason}',
+            stdout=True,
+        )
+
+    def cleanup_backups(
+        self, keep: int = 1, dry_run: bool = False,
+    ) -> tuple[bool, list[str]]:
+        """Delete all .backup files on the device except the newest `keep`.
+
+        Returns (ok, names): the files deleted (or, in a dry run, the
+        files that would be deleted).
+        """
+        if isinstance(keep, bool) or not isinstance(keep, int) or keep < 0:
+            raise ValueError(f'keep must be an integer >= 0, got {keep!r}')
+        backups = self.list_backups()
+        if backups is None:
+            return False, []
+        names = [name for _, name in backups[:max(0, len(backups) - keep)]]
+        kept = len(backups) - len(names)
+        if dry_run:
+            for name in names:
+                self.logger.log(
+                    'info', self.name, f'would delete backup {name}',
+                    stdout=True,
+                )
+            self.logger.log(
+                'info',
+                self.name,
+                f'dry run: would keep {kept}, '
+                f'delete {len(names)} backup file(s)',
+                stdout=True,
+            )
+            return True, names
+        deleted: list[str] = []
+        failed = 0
+        for name in names:
+            if not name.endswith('.backup') or '/' in name:
+                ok = False
+            else:
+                try:
+                    ok = self._delete_file(name)
+                except Exception as e:
+                    self.logger.log('error', self.name, str(e))
+                    ok = False
+            if ok:
+                self.logger.log(
+                    'info', self.name, f'deleted backup {name}', stdout=True,
+                )
+                deleted.append(name)
+            else:
+                self.logger.log(
+                    'error',
+                    self.name,
+                    f'failed to delete backup {name}',
+                    stdout=True,
+                )
+                failed += 1
+        summary = f'backup cleanup: kept {kept}, deleted {len(deleted)}'
+        if failed:
+            summary += f', failed {failed}'
+        self.logger.log('info', self.name, summary, stdout=True)
+        return not failed, deleted
+
+    def refresh_storage_info(self) -> None:
+        """Set backup_count and free_space (None when unknown)."""
+        backups = self.list_backups()
+        self.backup_count = None if backups is None else len(backups)
+        try:
+            lines = [
+                ln for ln in self.ssh_call(_FREE_SPACE_CMD) if ln.strip()
+            ]
+            self.free_space = int(lines[0].strip())
+        except Exception:
+            self.free_space = None
 
     def _downgrade(self) -> None:
         """

@@ -14,6 +14,16 @@ except importlib.metadata.PackageNotFoundError:
     VERSION_STR = _config['metadata']['version']
 
 
+def _non_negative_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'invalid integer: {value!r}')
+    if number < 0:
+        raise argparse.ArgumentTypeError('must be 0 or greater')
+    return number
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         add_help=False,
@@ -50,6 +60,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         help='Only perform backup and download the backup file.',
         action='store_true',
     )
+    single_action_group.add_argument(
+        '-C',
+        '--cleanup-backups',
+        help='Only delete old .backup files on the devices, keeping the '
+        'newest N (see --keep-backups). With --dry-run only list them.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '-k',
+        '--keep-backups',
+        help='Number of newest .backup files to keep on the device with '
+        '--cleanup-backups (default: %(default)s).',
+        type=_non_negative_int,
+        default=1,
+        metavar='N',
+    )
     parser.add_argument(
         '-d',
         dest='device_name',
@@ -64,7 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         action='version',
         version=f'%(prog)s version {VERSION_STR}',
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     configuration_file = args.configuration_file
     if not os.path.isfile(configuration_file):
         print(f'File {args.configuration_file} doesn\'t exist!')
@@ -93,7 +119,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     for d in devices:
         if d.ssh_test():
             d.ssh_connect()
-            if args.dry_run:
+            if args.cleanup_backups:
+                ok, _ = d.cleanup_backups(
+                    args.keep_backups, dry_run=args.dry_run,
+                )
+                if not ok:
+                    logger.log(
+                        'error',
+                        d.name,
+                        'backup cleanup failed',
+                        stdout=True,
+                    )
+            elif args.dry_run:
                 if d.update_type == 'manual':
                     installed = d.get_installed_packages()
                     logger.log(

@@ -4,7 +4,8 @@ mu_tui — curses-based interactive TUI for the mu (mikrotik_update) tool.
 Screens:
   1. YAML file selection (from a directory)
   2. Devices list with multi-select, live per-device job status and
-     bulk actions (refresh, backup, update, firmware, reboot)
+     bulk actions (refresh, backup, backup cleanup, update, firmware,
+     reboot)
   3. Device detail with per-device actions (channel, backup, update)
   4. Jobs list  (press ``j`` from any screen)
   5. Job log viewer
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import curses
+import functools
 import os
 import sys
 import threading
@@ -333,6 +335,23 @@ def popup_confirm(stdscr, msg: str) -> bool:
             return False
 
 
+def _fmt_bytes(n: int | None) -> str:
+    if n is None:
+        return '?'
+    if n < 1024:
+        return f'{n} B'
+    value = n / 1024
+    for unit in ('KiB', 'MiB', 'GiB'):
+        if value < 1024:
+            return f'{value:.1f} {unit}'
+        value /= 1024
+    return f'{value:.1f} TiB'
+
+
+def _fmt_count(n: int | None) -> str:
+    return '?' if n is None else str(n)
+
+
 def popup_select(stdscr, title: str, options: list[str]) -> str | None:
     if not options:
         return None
@@ -404,6 +423,7 @@ def _refresh_info(state: TuiState, dev: Device, job: Job) -> None:
     if dev.current_firmware == dev.upgrade_firmware:
         dev.firmware_reboot_pending = False
     dev.refresh_update_info()
+    dev.refresh_storage_info()
     state.info_fetched[dev.name] = True
     job.write(f'identity:           {dev.identity}')
     job.write(f'installed version:  {dev.installed_version}')
@@ -411,6 +431,8 @@ def _refresh_info(state: TuiState, dev: Device, job: Job) -> None:
     job.write(f'channel on device:  {dev.current_channel}')
     job.write(f'configured channel: {dev.online_update_channel}')
     job.write(dev.firmware_info_str)
+    job.write(f'backup files:       {_fmt_count(dev.backup_count)}')
+    job.write(f'free space:         {_fmt_bytes(dev.free_space)}')
 
 
 def _reconnect_and_refresh(state: TuiState, dev: Device, job: Job) -> None:
@@ -456,6 +478,22 @@ def job_backup(
             if not dev.backup():
                 raise RuntimeError('backup or export failed')
             job.write('backup + export OK')
+        _with_device(state, device, job, body)
+    return run
+
+
+def job_cleanup_backups(
+    state: TuiState, device: Device, keep: int = 1,
+) -> Callable[[Job], None]:
+    def run(job: Job) -> None:
+        def body(dev: Device) -> None:
+            ok, _ = dev.cleanup_backups(keep)
+            dev.refresh_storage_info()
+            job.write(
+                f'backup files on device: {_fmt_count(dev.backup_count)}',
+            )
+            if not ok:
+                raise RuntimeError('backup cleanup failed')
         _with_device(state, device, job, body)
     return run
 
@@ -542,6 +580,9 @@ def job_reboot(
 DEVICE_ACTIONS: list[tuple[str, str, Callable, str | None]] = [
     ('Refresh info', 'refresh', job_refresh, None),
     ('Backup + export config', 'backup', job_backup, ''),
+    (
+        'Clean up device backups', 'cleanup', job_cleanup_backups, None,
+    ),
     ('Update RouterOS', 'update', job_update, 'Devices will reboot.'),
     (
         'Update firmware', 'firmware', job_firmware_update,
@@ -552,6 +593,21 @@ DEVICE_ACTIONS: list[tuple[str, str, Callable, str | None]] = [
 
 
 # ---------- screens ----------
+
+def _ask_cleanup_keep(stdscr, who: str) -> int | None:
+    """Ask how many backups to keep and confirm; None if cancelled."""
+    choice = popup_select(
+        stdscr, 'Backups to keep (newest)', ['1', '2', '3', '5', '0'],
+    )
+    if choice is None:
+        return None
+    keep = int(choice)
+    msg = (
+        f'Delete all backups on {who} except the newest {keep}?'
+        if keep else f'Delete ALL backup files on {who}?'
+    )
+    return keep if popup_confirm(stdscr, msg) else None
+
 
 class YamlSelectScreen:
     def __init__(self, state: TuiState) -> None:
@@ -690,7 +746,9 @@ def _table(rows: list[list[str]]) -> list[str]:
 
 
 _ID_HEADERS = ['', 'NAME', 'ADDRESS']
-_INFO_HEADERS = ['IDENTITY', 'VERSION', 'CHANNEL', 'UPD', 'FIRMWARE', '']
+_INFO_HEADERS = [
+    'IDENTITY', 'VERSION', 'CHANNEL', 'UPD', 'FIRMWARE', '', 'BACKUPS', 'FREE',
+]
 _JOB_HEADER = 'LAST JOB'
 # Second-row indent in the two-row layout: lines info up under NAME.
 _INFO_INDENT = ' ' * 5
@@ -709,7 +767,7 @@ class DevicesScreen:
             if getattr(d, 'firmware_reboot_pending', False) else ''
         )
         if not self.state.info_fetched.get(d.name):
-            return ['(no info)', '', '', '', '', pending]
+            return ['(no info)', '', '', '', '', pending, '', '']
         avail = getattr(d, 'update_available', None)
         return [
             d.identity or '?',
@@ -718,6 +776,8 @@ class DevicesScreen:
             'yes' if avail else ('no' if avail is False else '?'),
             _arrow(d.current_firmware, d.upgrade_firmware),
             pending,
+            _fmt_count(d.backup_count),
+            _fmt_bytes(d.free_space),
         ]
 
     def _layout(self, w: int) -> tuple[list[str], list[list[str]]]:
@@ -823,6 +883,14 @@ class DevicesScreen:
         for label, name, factory, warning in DEVICE_ACTIONS:
             if label != choice:
                 continue
+            if name == 'cleanup':
+                keep = _ask_cleanup_keep(stdscr, who)
+                if keep is None:
+                    return
+                self._submit(
+                    name, functools.partial(factory, keep=keep), targets,
+                )
+                return
             if warning is not None and not popup_confirm(
                 stdscr, f'{label} on {who}? {warning}'.strip(),
             ):
@@ -884,6 +952,7 @@ class DeviceDetailScreen:
             ('Refresh info', self.act_refresh),
             ('Change update channel', self.act_channel),
             ('Backup + export config', self.act_backup),
+            ('Clean up device backups', self.act_cleanup),
             ('Perform update', self.act_update),
             ('Update firmware now (reboots)', self.act_firmware),
             ('Stage firmware upgrade (next reboot)', self.act_stage_fw),
@@ -914,6 +983,8 @@ class DeviceDetailScreen:
                 f'{getattr(d, "current_channel", "?")}',
                 f'Current firmware:    {d.current_firmware}',
                 f'Upgrade firmware:    {d.upgrade_firmware}',
+                f'Backup files on device: {_fmt_count(d.backup_count)}',
+                f'Free storage:        {_fmt_bytes(d.free_space)}',
             ])
         else:
             lines.append('(info not fetched — use "Refresh info" below)')
@@ -1025,6 +1096,16 @@ class DeviceDetailScreen:
         return self.state.jobs.submit(
             f'backup {self.device.name}',
             job_backup(self.state, self.device),
+            device=self.device.name,
+        )
+
+    def act_cleanup(self, stdscr) -> Job | None:
+        keep = _ask_cleanup_keep(stdscr, self.device.name)
+        if keep is None:
+            return None
+        return self.state.jobs.submit(
+            f'cleanup {self.device.name}',
+            job_cleanup_backups(self.state, self.device, keep),
             device=self.device.name,
         )
 
